@@ -32,3 +32,4 @@ cd sticker_pc && flutter build windows
 cd vps-server && GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o sticker-vps .
 ```
 ## 使用教程
+# https://github.com/xiaozou-wine/sticker-manager/blob/main/vps-server/SETUP_GUIDE.md
