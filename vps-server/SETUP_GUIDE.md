@@ -4,7 +4,7 @@
 
 ### 创建表情包集
 1. 打开 App → 首页点击 **+** 按钮
-2. 从相册选择表情图片（最多 50 张）
+2. 从相册选择表情图片（最多 200 张）
 3. 输入表情包名称 → 确认创建
 
 ### 发送表情到 QQ/微信
@@ -25,7 +25,7 @@ VPS 分享是**端到端加密**的：服务器只存加密数据，即使 VPS �
 
 ### 你需要什么
 - 一台 VPS（最低配置即可，1 核 1G 足够）
-- 本教程使用域名 `sticker.070210.xyz` 作为示例
+- 本教程使用域名 `sticker.example.com` 作为示例
 
 ### 部署 VPS 服务
 
@@ -136,7 +136,7 @@ nginx -t && systemctl restart nginx
 - SSH 到 VPS，执行 `cat /data/sticker-vps/.env` 查看
 
 **Q: 分享链接会暴露 IP 吗？**
-- 用域名（如 `https://sticker.070210.xyz`）分享不会暴露 IP
+- 用域名（如 `https://sticker.example.com`）分享不会暴露 IP
 - 直接用 `http://IP:8080` 分享会暴露
 
 **Q: VPS 管理员能看到我的表情包吗？**
