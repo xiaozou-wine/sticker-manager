@@ -31,3 +31,4 @@ cd sticker_pc && flutter build windows
 # VPS 分享服务
 cd vps-server && GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o sticker-vps .
 ```
+## 使用教程
