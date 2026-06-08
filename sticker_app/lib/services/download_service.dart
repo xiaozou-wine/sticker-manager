@@ -1,10 +1,10 @@
 import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
+import 'package:gal/gal.dart';
 import 'api_service.dart';
 import 'storage_service.dart';
 import '../models/sticker.dart';
-import 'accessibility_service.dart';
 
 class DownloadService {
   final ApiService apiService;
@@ -18,7 +18,6 @@ class DownloadService {
     required String packName,
     Function(int completed, int total)? onProgress,
   }) async {
-    // Get pack info
     final pack = await apiService.getPackByCode(shareCode);
     final remoteStickers = await apiService.getPackStickers(shareCode);
 
@@ -26,18 +25,15 @@ class DownloadService {
       return DownloadResult(packId: pack.id, stickerCount: 0);
     }
 
-    // Save pack to local DB
     pack.source = 'link';
     await storageService.insertPack(pack);
 
-    // Get local cache directory
     final appDir = await getApplicationDocumentsDirectory();
     final packDir = Directory(p.join(appDir.path, 'stickers', pack.id));
     if (!await packDir.exists()) {
       await packDir.create(recursive: true);
     }
 
-    // Download each sticker
     final stickers = <Sticker>[];
     final failedIds = <String>[];
     for (int i = 0; i < remoteStickers.length; i++) {
@@ -47,9 +43,9 @@ class DownloadService {
         final localPath = p.join(packDir.path, '${remote.id}$ext');
         await apiService.downloadSticker(remote.fileUrl, localPath);
 
-        // Save to phone gallery (Android only)
+        // Save to phone gallery (best-effort)
         if (Platform.isAndroid) {
-          await AccessibilityService.saveToGallery(localPath, folderName: 'StickerApp/$packName');
+          try { await Gal.putImage(localPath, album: 'StickerApp/$packName'); } catch (_) {}
         }
 
         final sticker = Sticker(
@@ -70,11 +66,9 @@ class DownloadService {
       }
     }
 
-    // Batch insert stickers
     await storageService.insertStickers(stickers);
     await storageService.updatePackStickerCount(pack.id);
 
-    // Update cover
     if (stickers.isNotEmpty) {
       pack.coverLocal = stickers.first.localPath;
       pack.coverUrl = remoteStickers.first.fileUrl;
@@ -87,7 +81,6 @@ class DownloadService {
       failedCount: failedIds.length,
     );
   }
-
 }
 
 class DownloadResult {

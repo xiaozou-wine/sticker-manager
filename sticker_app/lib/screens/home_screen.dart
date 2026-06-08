@@ -3,11 +3,12 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/pack_provider.dart';
 import '../models/sticker_pack.dart';
+import '../services/clipboard_service.dart';
 import 'gallery_picker_screen.dart';
+import 'desktop_gallery_picker_screen.dart';
 import 'pack_detail_screen.dart';
 import 'import_link_screen.dart';
 import 'share_pack_screen.dart';
-import 'accessibility_settings_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -45,7 +46,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 ElevatedButton.icon(
                   onPressed: () => _addFromGallery(context),
                   icon: const Icon(Icons.add_photo_alternate),
-                  label: const Text('从相册添加'),
+                  label: Text(ClipboardService.isDesktop ? '从文件添加' : '从相册添加'),
                 ),
               ]),
             );
@@ -77,13 +78,14 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _showAddOptions(BuildContext context) {
+    final isDesktop = ClipboardService.isDesktop;
     showModalBottomSheet(
       context: context,
       builder: (context) => SafeArea(
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           ListTile(
-            leading: const Icon(Icons.photo_library),
-            title: const Text('从相册添加'),
+            leading: Icon(isDesktop ? Icons.folder_open : Icons.photo_library),
+            title: Text(isDesktop ? '从文件添加' : '从相册添加'),
             onTap: () { Navigator.pop(context); _addFromGallery(context); },
           ),
           ListTile(
@@ -97,9 +99,14 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _addFromGallery(BuildContext context) async {
+    final isDesktop = ClipboardService.isDesktop;
     final result = await Navigator.push<List<File>>(
       context,
-      MaterialPageRoute(builder: (_) => const GalleryPickerScreen()),
+      MaterialPageRoute(
+        builder: (_) => isDesktop
+            ? const DesktopGalleryPickerScreen()
+            : const GalleryPickerScreen(),
+      ),
     );
     if (result != null && result.isNotEmpty) {
       if (!context.mounted) return;

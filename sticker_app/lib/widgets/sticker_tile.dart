@@ -2,7 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
-class StickerTile extends StatelessWidget {
+class StickerTile extends StatefulWidget {
   final String? localPath;
   final String? imageUrl;
   final VoidCallback? onTap;
@@ -17,33 +17,66 @@ class StickerTile extends StatelessWidget {
   });
 
   @override
+  State<StickerTile> createState() => _StickerTileState();
+}
+
+class _StickerTileState extends State<StickerTile> {
+  bool _hovered = false;
+
+  @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      onLongPress: onLongPress,
+    final isDesktop = Platform.isWindows || Platform.isMacOS || Platform.isLinux;
+    final tile = GestureDetector(
+      onTap: widget.onTap,
+      onLongPress: widget.onLongPress,
       child: Container(
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(8),
           color: Colors.grey[200],
+          border: _hovered
+              ? Border.all(color: Theme.of(context).colorScheme.primary, width: 2)
+              : null,
         ),
         clipBehavior: Clip.antiAlias,
-        child: _buildImage(),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            _buildImage(),
+            if (_hovered && widget.onTap != null)
+              Container(
+                color: Colors.black26,
+                child: const Center(
+                  child: Icon(Icons.copy, color: Colors.white, size: 28),
+                ),
+              ),
+          ],
+        ),
       ),
     );
+
+    if (isDesktop && widget.onTap != null) {
+      return MouseRegion(
+        onEnter: (_) => setState(() => _hovered = true),
+        onExit: (_) => setState(() => _hovered = false),
+        cursor: SystemMouseCursors.click,
+        child: tile,
+      );
+    }
+    return tile;
   }
 
   Widget _buildImage() {
-    if (localPath != null && localPath!.isNotEmpty) {
+    if (widget.localPath != null && widget.localPath!.isNotEmpty) {
       return Image.file(
-        File(localPath!),
+        File(widget.localPath!),
         fit: BoxFit.cover,
         errorBuilder: (_, __, ___) => _buildPlaceholder(),
       );
     }
 
-    if (imageUrl != null && imageUrl!.isNotEmpty) {
+    if (widget.imageUrl != null && widget.imageUrl!.isNotEmpty) {
       return CachedNetworkImage(
-        imageUrl: imageUrl!,
+        imageUrl: widget.imageUrl!,
         fit: BoxFit.cover,
         placeholder: (_, __) => const Center(
           child: CircularProgressIndicator(strokeWidth: 2),

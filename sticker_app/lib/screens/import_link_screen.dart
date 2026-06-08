@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
+import 'package:gal/gal.dart';
 import '../config.dart';
 import '../models/sticker.dart';
 import '../services/api_service.dart';
@@ -11,7 +12,6 @@ import '../services/crypto_service.dart';
 import '../services/download_service.dart';
 import '../providers/pack_provider.dart';
 import '../services/storage_service.dart';
-import '../services/accessibility_service.dart';
 
 class ImportLinkScreen extends StatefulWidget {
   final String? initialLink;
@@ -204,7 +204,6 @@ class _ImportLinkScreenState extends State<ImportLinkScreen> {
 
     final stickers = <Sticker>[];
     int failedCount = 0;
-    String? lastError;
     for (int i = 0; i < remoteStickers.length; i++) {
       final remote = remoteStickers[i];
       try {
@@ -220,7 +219,7 @@ class _ImportLinkScreenState extends State<ImportLinkScreen> {
         // Save to phone gallery (Android only, best-effort)
         if (Platform.isAndroid) {
           try {
-            await AccessibilityService.saveToGallery(localPath, folderName: 'StickerApp/${pack.name}');
+            await Gal.putImage(localPath, album: 'StickerApp/${pack.name}');
           } catch (_) {}
         }
 
@@ -231,7 +230,6 @@ class _ImportLinkScreenState extends State<ImportLinkScreen> {
         ));
         if (mounted) setState(() { _downloadProgress = (i + 1) / remoteStickers.length; });
       } catch (e) {
-        lastError = e.toString();
         failedCount++;
       }
     }

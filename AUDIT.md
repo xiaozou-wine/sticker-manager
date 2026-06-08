@@ -1,36 +1,33 @@
 # 表情包项目审计问题清单
 
-审计日期: 2026-06-08 | 上次更新: 2026-06-08 (第3轮 - 全部修复)
+审计日期: 2026-06-08 | 上次更新: 2026-06-08 (第15轮 - 无障碍子系统移除)
 
-## P0 严重
-- [x] **#1 路遍历** — pack_handler.go GetStickerFile 添加 isSafeID 验证 + 路径前缀检查
-- [x] **#2 无认证/鉴权** — MVP 阶段可接受，后续 Phase 加入
-- [x] **#3 CORS 设为 *** — main.go 添加 --cors-origin 可配置参数
-- [x] **#4 Share Code 太小** — pack_service.go 改为 8 字节 (16 hex chars)
+## 项目状态
+无障碍/保活子系统已完全移除。项目回归纯表情包管理 + 相册保存。
 
 ## Bug 追踪
-- [x] **BUG-1** PermissionState.denied — gallery_picker_screen 添加权限预检查 + 设置页跳转
+- [x] **BUG-1~34** 全部已修复（含随代码删除一起清除）
+- [ ] **BUG-35 (P2)** `RequestType.common` 允许非图片文件 — `gallery_picker_screen.dart:134` 用 `RequestType.common` 替代 `RequestType.image`，允许用户选择视频/音频文件，`_confirmSelection` 不过滤类型。**修复**: 改回 `RequestType.image`
 
-## P1 正确性
-- [x] **#5 Pack 创建后全部上传失败不回滚** — 上传全部失败时删除空 pack 和文件
-- [x] **#6 单个 sticker 失败静默吞掉** — 改为 log.Printf 记录错误
-- [x] **#7 Sticker.fromApiMap 丢失 extension** — 从 file_url 提取扩展名
-- [x] **#8 Flutter FK pragma 仅在 onCreate** — 移至 onConfigure 回调
+## 已删除的代码（第15轮）
+| 文件 | 行数 | 说明 |
+|------|------|------|
+| StickerAccessibilityService.kt | -111 | 无障碍服务 |
+| StickerDataHelper.kt | -185 | 直接读取 Flutter DB |
+| KeepAliveService.kt | -90 | 前台保活服务 |
+| BootReceiver.kt | -20 | 开机自启 |
+| accessibility_settings_screen.dart | -294 | 设置页面 |
+| ui_snapshot_screen.dart | -309 | UI 节点快照 |
+| accessibility_service.dart | -70 | MethodChannel 接口 |
+| accessibility_service_config.xml | -11 | 服务配置 |
+| AndroidManifest.xml | -35 | 权限/服务声明 |
+| MainActivity.kt | -123 | 仅保留 saveToGallery |
 
-## P2 性能/体验
-- [x] **#9 gallery_service navigatorKey 未绑定** — GalleryPickerScreen 自行处理，navigatorKey 保留备用
-- [x] **#10 串行下载** — MVP 可接受，后续可加并发
-- [x] **#11 cached_network_image 未使用** — sticker_tile.dart 改用 CachedNetworkImage
-- [x] **#12 detectImageSize 读 1MB 过多** — 改为 4KB
+**合计删除 ~1250 行代码**，零残留引用。
 
-## P3 代码质量
-- [x] **#14 冗余代码** — store 中未使用方法保留供后续使用
-- [x] **#15 错误信息泄露** — handler 改用 log.Printf + 用户友好消息；Flutter 侧移除 $e 暴露
-- [x] **#18 AddSticker 无事务** — 使用 db.Tx 包裹 CreateSticker + IncrementPackCount
-- [x] **#19 rand.Read 错误被忽略** — 添加错误检查，失败时 panic
-
-## 已修复 (历史)
-- [x] **#13 home_screen.dart 和 import_link_screen.dart 未完成** (第1轮)
-- [x] **#16 Pack ID 用时间戳可能冲突** — 改用 Uuid().v4() (第1轮)
-- [x] **#17 API baseUrl 硬编码 localhost** — 新增 config.dart (第1轮)
-- [x] **#20 share_pack_screen 错误消息泄露** — 合并至 #15 (第3轮)
+## 保留功能
+- 表情包管理（CRUD）
+- 分享链接导入（sticker:// deep link + AES-256-GCM 加密）
+- VPS 端到端加密分享
+- 保存到相册（saveToGallery）
+- 桌面支持（window_manager + hotkey + tray）

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
+import 'package:file_picker/file_picker.dart' as fp;
 import '../providers/sticker_provider.dart';
 import '../providers/pack_provider.dart';
 import '../models/sticker_pack.dart';
@@ -10,6 +11,7 @@ import '../models/sticker.dart';
 import '../widgets/sticker_grid.dart';
 import '../services/storage_service.dart';
 import '../services/gallery_save_service.dart';
+import '../services/clipboard_service.dart';
 import 'gallery_picker_screen.dart';
 
 class PackDetailScreen extends StatefulWidget {
@@ -85,6 +87,7 @@ class _PackDetailScreenState extends State<PackDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isDesktop = ClipboardService.isDesktop;
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.pack.name),
@@ -95,7 +98,7 @@ class _PackDetailScreenState extends State<PackDetailScreen> {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
+                  const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
                   const SizedBox(width: 6),
                   Text('$_saveCurrent/$_saveTotal', style: const TextStyle(fontSize: 13)),
                   const SizedBox(width: 8),
@@ -109,9 +112,9 @@ class _PackDetailScreenState extends State<PackDetailScreen> {
               tooltip: '重命名',
             ),
             IconButton(
-              icon: const Icon(Icons.save_alt),
-              onPressed: _confirmSaveToGallery,
-              tooltip: '保存到相册',
+              icon: Icon(isDesktop ? Icons.folder_open : Icons.save_alt),
+              onPressed: isDesktop ? _exportToFolder : _confirmSaveToGallery,
+              tooltip: isDesktop ? '导出到文件夹' : '保存到相册',
             ),
           ],
           if (_isImporting)
@@ -134,11 +137,33 @@ class _PackDetailScreenState extends State<PackDetailScreen> {
           }
           return StickerGrid(
             stickers: provider.stickers,
+            onStickerTap: isDesktop ? (sticker) => _copySticker(sticker) : null,
             onStickerLongPress: (sticker) => _showDeleteStickerDialog(sticker),
           );
         },
       ),
     );
+  }
+
+  Future<void> _copySticker(Sticker sticker) async {
+    if (sticker.localPath == null) return;
+    try {
+      await ClipboardService.copyImage(sticker.localPath!);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('已复制到剪贴板，Ctrl+V 粘贴到聊天窗口'),
+            duration: Duration(seconds: 1),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('复制失败: $e')),
+        );
+      }
+    }
   }
 
   Future<void> _addMore() async {
@@ -213,6 +238,84 @@ class _PackDetailScreenState extends State<PackDetailScreen> {
         ],
       ),
     );
+  }
+
+  Future<void> _exportToFolder() async {
+    final dir = await fp.FilePicker.platform.getDirectoryPath(
+      dialogTitle: '选择导出目录',
+    );
+    if (dir == null) return;
+
+    final provider = context.read<StickerProvider>();
+    final count = provider.stickers.length;
+    if (count == 0) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('当前没有表情可以导出')),
+        );
+      }
+      return;
+    }
+
+    setState(() {
+      _isSaving = true;
+      _saveCurrent = 0;
+      _saveTotal = count;
+    });
+
+    final messenger = ScaffoldMessenger.of(context);
+    int saved = 0;
+    int failed = 0;
+
+    try {
+      final exportDir = Directory(p.join(dir, widget.pack.name));
+      if (!await exportDir.exists()) {
+        await exportDir.create(recursive: true);
+      }
+
+      for (int i = 0; i < provider.stickers.length; i++) {
+        final sticker = provider.stickers[i];
+        if (sticker.localPath != null) {
+          try {
+            final src = File(sticker.localPath!);
+            if (await src.exists()) {
+              final ext = p.extension(sticker.localPath!);
+              await src.copy(p.join(exportDir.path, '${sticker.id}$ext'));
+              saved++;
+            } else {
+              failed++;
+            }
+          } catch (_) {
+            failed++;
+          }
+        } else {
+          failed++;
+        }
+        if (mounted) {
+          setState(() {
+            _saveCurrent = i + 1;
+          });
+        }
+      }
+
+      if (!mounted) return;
+      if (failed == 0) {
+        messenger.showSnackBar(
+          SnackBar(content: Text('已导出 $saved 个表情到 ${exportDir.path}')),
+        );
+      } else {
+        messenger.showSnackBar(
+          SnackBar(content: Text('导出完成：成功 $saved 个，失败 $failed 个')),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      messenger.showSnackBar(
+        SnackBar(content: Text('导出失败: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
   }
 
   Future<void> _confirmSaveToGallery() async {

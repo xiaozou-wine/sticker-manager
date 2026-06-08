@@ -130,9 +130,10 @@ class _GalleryPickerScreenState extends State<GalleryPickerScreen> {
       final List<AssetEntity>? assets = await AssetPicker.pickAssets(
         context,
         pickerConfig: AssetPickerConfig(
-          maxAssets: 50,
+          maxAssets: 200,
           requestType: RequestType.common,
           selectedAssets: _selectedAssets,
+          specialPickerType: SpecialPickerType.noPreview,
         ),
       );
 

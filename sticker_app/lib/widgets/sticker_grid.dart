@@ -31,23 +31,28 @@ class StickerGrid extends StatelessWidget {
       );
     }
 
-    return GridView.builder(
-      padding: const EdgeInsets.all(8),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 4,
-        crossAxisSpacing: 6,
-        mainAxisSpacing: 6,
-      ),
-      itemCount: stickers.length,
-      itemBuilder: (context, index) {
-        final sticker = stickers[index];
-        return StickerTile(
-          localPath: sticker.localPath,
-          imageUrl: baseUrl != null ? '$baseUrl/api/stickers/${sticker.id}/file' : null,
-          onTap: onStickerTap != null ? () => onStickerTap!(sticker) : null,
-          onLongPress: onStickerLongPress != null
-              ? () => onStickerLongPress!(sticker)
-              : null,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final crossAxisCount = (constraints.maxWidth / 110).floor().clamp(3, 12);
+        return GridView.builder(
+          padding: const EdgeInsets.all(8),
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: crossAxisCount,
+            crossAxisSpacing: 6,
+            mainAxisSpacing: 6,
+          ),
+          itemCount: stickers.length,
+          itemBuilder: (context, index) {
+            final sticker = stickers[index];
+            return StickerTile(
+              localPath: sticker.localPath,
+              imageUrl: baseUrl != null ? '$baseUrl/api/stickers/${sticker.id}/file' : null,
+              onTap: onStickerTap != null ? () => onStickerTap!(sticker) : null,
+              onLongPress: onStickerLongPress != null
+                  ? () => onStickerLongPress!(sticker)
+                  : null,
+            );
+          },
         );
       },
     );

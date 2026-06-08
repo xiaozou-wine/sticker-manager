@@ -1,15 +1,26 @@
+import 'init_desktop_stub.dart'
+    if (dart.library.io) 'init_desktop_real.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:app_links/app_links.dart';
 import 'services/storage_service.dart';
+import 'services/clipboard_service.dart';
 import 'providers/pack_provider.dart';
 import 'providers/sticker_provider.dart';
 import 'screens/home_screen.dart';
 import 'screens/import_link_screen.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
   final storage = StorageService();
+
+  // Desktop-only initialization (no-op on Android/iOS)
+  if (ClipboardService.isDesktop) {
+    initDesktopDatabase();
+    await initDesktopServices();
+  }
+
   runApp(MyApp(storage: storage));
 }
 
@@ -58,6 +69,14 @@ class _MyAppState extends State<MyApp> {
         );
       });
     }
+  }
+
+  @override
+  void dispose() {
+    if (ClipboardService.isDesktop) {
+      disposeDesktopServices();
+    }
+    super.dispose();
   }
 
   @override

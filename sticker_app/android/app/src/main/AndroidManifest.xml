@@ -4,13 +4,6 @@
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
 
-    <!-- Keep alive foreground service -->
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
-    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
-    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
-
     <application
         android:label="sticker_app"
         android:name="${applicationName}"
@@ -42,25 +35,6 @@
             </intent-filter>
         </activity>
 
-        <!-- Accessibility Service -->
-        <service
-            android:name=".StickerAccessibilityService"
-            android:exported="false"
-            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
-            <intent-filter>
-                <action android:name="android.accessibilityservice.AccessibilityService" />
-            </intent-filter>
-            <meta-data
-                android:name="android.accessibilityservice"
-                android:resource="@xml/accessibility_service_config" />
-        </service>
-
-        <!-- Keep Alive foreground service -->
-        <service
-            android:name=".KeepAliveService"
-            android:exported="false"
-            android:foregroundServiceType="specialUse" />
-
         <!-- FileProvider for sharing sticker images via content:// URIs -->
         <provider
             android:name="androidx.core.content.FileProvider"
@@ -75,15 +49,6 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
-        <!-- Boot auto-start -->
-        <receiver
-            android:name=".BootReceiver"
-            android:exported="true"
-            android:enabled="true">
-            <intent-filter>
-                <action android:name="android.intent.action.BOOT_COMPLETED" />
-            </intent-filter>
-        </receiver>
     </application>
     <queries>
         <intent>
