@@ -18,6 +18,9 @@
 - [ ] **#3 CORS 设为 *** — `security-scan` — server/main.go:49 生产环境应限制域名
 - [ ] **#4 Share Code 太小** — `go-review` — server/service/pack_service.go:87-91 4字节可被暴力枚举
 
+## Bug 追踪
+- [ ] **BUG-1** `Bad State: Permission state error with PermissionState.denied` — gallery_picker_screen.dart / wechat_assets_picker 调用时权限被拒绝后未正确处理状态，应用 try-catch 包裹权限请求并引导用户手动开启设置
+
 ## P1 正确性
 - [ ] **#5 Pack 创建后全部上传失败不回滚** — `go-review` — server/handler/pack_handler.go:37-105
 - [ ] **#6 单个 sticker 失败静默吞掉** — `go-review` — server/handler/pack_handler.go:77-91

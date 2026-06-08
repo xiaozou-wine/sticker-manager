@@ -17,6 +17,7 @@ func main() {
 	dbPath := flag.String("db", "./data/stickers.db", "SQLite database path")
 	staticDir := flag.String("static", "./static", "static files directory")
 	baseURL := flag.String("base-url", "", "base URL for file links (e.g. http://localhost:8080)")
+	corsOrigin := flag.String("cors-origin", "*", "allowed CORS origin (use specific domain in production)")
 	flag.Parse()
 
 	if *baseURL == "" {
@@ -44,9 +45,9 @@ func main() {
 	// Setup router
 	r := gin.Default()
 
-	// Allow CORS for development
+	// #3 CORS: configurable origin
 	r.Use(func(c *gin.Context) {
-		c.Header("Access-Control-Allow-Origin", "*")
+		c.Header("Access-Control-Allow-Origin", *corsOrigin)
 		c.Header("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
 		c.Header("Access-Control-Allow-Headers", "Content-Type")
 		if c.Request.Method == "OPTIONS" {

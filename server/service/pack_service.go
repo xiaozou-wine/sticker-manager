@@ -2,6 +2,7 @@ package service
 
 import (
 	"crypto/rand"
+	"database/sql"
 	"encoding/hex"
 	"sticker-server/model"
 	"sticker-server/store"
@@ -55,10 +56,22 @@ func (s *PackService) AddSticker(packID, stickerID, fileType, ext string, width,
 		Extension: ext,
 		CreatedAt: time.Now(),
 	}
-	if err := s.db.CreateSticker(sticker); err != nil {
+	// #18 Wrap in transaction
+	return s.db.Tx(func(tx *sql.Tx) error {
+		_, err := tx.Exec(
+			`INSERT INTO stickers (id, pack_id, type, width, height, size_bytes, extension, created_at)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+			sticker.ID, sticker.PackID, sticker.Type, sticker.Width, sticker.Height, sticker.SizeBytes, sticker.Extension, sticker.CreatedAt,
+		)
+		if err != nil {
+			return err
+		}
+		_, err = tx.Exec(
+			"UPDATE sticker_packs SET sticker_count = sticker_count + 1, updated_at = ? WHERE id = ?",
+			time.Now(), packID,
+		)
 		return err
-	}
-	return s.db.IncrementPackCount(packID, 1)
+	})
 }
 
 func (s *PackService) GetStickersByPackID(packID string) ([]model.Sticker, error) {
@@ -80,12 +93,16 @@ func (s *PackService) GetBaseURL() string {
 
 func generateID() string {
 	b := make([]byte, 16)
-	rand.Read(b)
+	if _, err := rand.Read(b); err != nil {
+		panic("crypto/rand unavailable: " + err.Error())
+	}
 	return hex.EncodeToString(b)
 }
 
 func generateShareCode() string {
-	b := make([]byte, 4)
-	rand.Read(b)
+	b := make([]byte, 8)
+	if _, err := rand.Read(b); err != nil {
+		panic("crypto/rand unavailable: " + err.Error())
+	}
 	return hex.EncodeToString(b)
 }

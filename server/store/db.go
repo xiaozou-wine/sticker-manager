@@ -37,6 +37,18 @@ func (db *DB) Close() error {
 	return db.conn.Close()
 }
 
+func (db *DB) Tx(fn func(tx *sql.Tx) error) error {
+	tx, err := db.conn.Begin()
+	if err != nil {
+		return err
+	}
+	if err := fn(tx); err != nil {
+		tx.Rollback()
+		return err
+	}
+	return tx.Commit()
+}
+
 func (db *DB) migrate() error {
 	queries := []string{
 		`CREATE TABLE IF NOT EXISTS sticker_packs (

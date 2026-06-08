@@ -7,10 +7,12 @@ import (
 	_ "image/jpeg"
 	_ "image/png"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
+	"unicode"
 
 	"github.com/gin-gonic/gin"
 	"sticker-server/service"
@@ -27,16 +29,17 @@ func NewPackHandler(packSvc *service.PackService, staticDir string) *PackHandler
 
 // CreatePack handles POST /api/packs
 func (h *PackHandler) CreatePack(c *gin.Context) {
-	name := c.PostForm("name")
+	name := sanitizeInput(c.PostForm("name"))
 	if name == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "name is required"})
 		return
 	}
-	description := c.PostForm("description")
+	description := sanitizeInput(c.PostForm("description"))
 
 	pack, err := h.packSvc.CreatePack(name, description)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		log.Printf("CreatePack error: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create pack"})
 		return
 	}
 
@@ -59,11 +62,13 @@ func (h *PackHandler) CreatePack(c *gin.Context) {
 
 	packDir := filepath.Join(h.staticDir, "stickers", pack.ID)
 	if err := os.MkdirAll(packDir, 0755); err != nil {
+		log.Printf("CreatePack mkdir error: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create storage dir"})
 		return
 	}
 
 	var uploaded []map[string]interface{}
+	var savedFiles []string // track for rollback
 	for i, file := range files {
 		ext := strings.ToLower(filepath.Ext(file.Filename))
 		if !isValidImageExt(ext) {
@@ -74,8 +79,10 @@ func (h *PackHandler) CreatePack(c *gin.Context) {
 		stickerID := fmt.Sprintf("%s_%d", pack.ID, i)
 		savePath := filepath.Join(packDir, stickerID+ext)
 		if err := c.SaveUploadedFile(file, savePath); err != nil {
+			log.Printf("CreatePack save file error: %v", err)
 			continue
 		}
+		savedFiles = append(savedFiles, savePath)
 
 		// Detect image dimensions
 		width, height := detectImageSize(savePath)
@@ -85,26 +92,33 @@ func (h *PackHandler) CreatePack(c *gin.Context) {
 		}
 
 		// Record in DB
-		err := h.packSvc.AddSticker(pack.ID, stickerID, fileType, ext, width, height, file.Size)
-		if err != nil {
+		if err := h.packSvc.AddSticker(pack.ID, stickerID, fileType, ext, width, height, file.Size); err != nil {
+			log.Printf("CreatePack add sticker error: %v", err)
 			continue
 		}
 
 		// Set first image as cover
-		if i == 0 {
+		if len(uploaded) == 0 {
 			h.packSvc.SetPackCover(pack.ID, stickerID, ext)
 		}
 
 		uploaded = append(uploaded, map[string]interface{}{
-			"id":        stickerID,
-			"type":      fileType,
-			"width":     width,
-			"height":    height,
-			"file_url":  "/api/stickers/" + stickerID + "/file",
+			"id":       stickerID,
+			"type":     fileType,
+			"width":    width,
+			"height":   height,
+			"file_url": "/api/stickers/" + stickerID + "/file",
 		})
 	}
 
-	// Refresh pack info
+	// #5 Rollback: if all uploads failed, delete the empty pack
+	if len(uploaded) == 0 {
+		os.RemoveAll(packDir)
+		h.packSvc.DeletePack(pack.ID)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "all sticker uploads failed"})
+		return
+	}
+
 	updatedPack, _ := h.packSvc.GetPackByID(pack.ID)
 
 	c.JSON(http.StatusCreated, gin.H{
@@ -139,18 +153,19 @@ func (h *PackHandler) GetPackStickers(c *gin.Context) {
 
 	stickers, err := h.packSvc.GetStickersByPackID(pack.ID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		log.Printf("GetPackStickers error: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load stickers"})
 		return
 	}
 
 	baseURL := h.packSvc.GetBaseURL()
 	type stickerResp struct {
-		ID       string `json:"id"`
-		Type     string `json:"type"`
-		FileURL  string `json:"file_url"`
-		Width    int    `json:"width"`
-		Height   int    `json:"height"`
-		SizeBytes int64 `json:"size_bytes"`
+		ID        string `json:"id"`
+		Type      string `json:"type"`
+		FileURL   string `json:"file_url"`
+		Width     int    `json:"width"`
+		Height    int    `json:"height"`
+		SizeBytes int64  `json:"size_bytes"`
 	}
 
 	var resp []stickerResp
@@ -174,21 +189,31 @@ func (h *PackHandler) GetPackStickers(c *gin.Context) {
 // GetStickerFile handles GET /api/stickers/:id/file
 func (h *PackHandler) GetStickerFile(c *gin.Context) {
 	id := c.Param("id")
+
+	// #1 Path traversal: validate ID contains only safe chars
+	if !isSafeID(id) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid sticker id"})
+		return
+	}
+
 	sticker, err := h.packSvc.GetStickerByID(id)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "sticker not found"})
 		return
 	}
 
-	// Find the file - try different paths
-	parts := strings.SplitN(id, "_", 2)
-	if len(parts) < 2 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid sticker id"})
+	// Build file path using pack ID from sticker record (not from user input)
+	packID := sticker.PackID
+	filePath := filepath.Join(h.staticDir, "stickers", packID, id+sticker.Extension)
+
+	// #1 Double-check resolved path is within static dir
+	absStatic, _ := filepath.Abs(h.staticDir)
+	absFile, _ := filepath.Abs(filePath)
+	if !strings.HasPrefix(absFile, absStatic) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "access denied"})
 		return
 	}
-	packID := parts[0]
 
-	filePath := filepath.Join(h.staticDir, "stickers", packID, id+sticker.Extension)
 	if _, err := os.Stat(filePath); os.IsNotExist(err) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "file not found"})
 		return
@@ -220,9 +245,9 @@ func (h *PackHandler) DeletePack(c *gin.Context) {
 	packDir := filepath.Join(h.staticDir, "stickers", pack.ID)
 	os.RemoveAll(packDir)
 
-	// Delete from DB (cascades to stickers)
 	if err := h.packSvc.DeletePack(pack.ID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		log.Printf("DeletePack error: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete pack"})
 		return
 	}
 
@@ -237,6 +262,28 @@ func isValidImageExt(ext string) bool {
 	return false
 }
 
+// #1 Path traversal prevention
+func isSafeID(id string) bool {
+	if len(id) == 0 || len(id) > 128 {
+		return false
+	}
+	for _, r := range id {
+		if !unicode.IsLetter(r) && !unicode.IsDigit(r) && r != '_' && r != '-' {
+			return false
+		}
+	}
+	return true
+}
+
+// #15 Sanitize user input
+func sanitizeInput(s string) string {
+	s = strings.TrimSpace(s)
+	if len(s) > 256 {
+		s = s[:256]
+	}
+	return s
+}
+
 func detectImageSize(path string) (int, int) {
 	f, err := os.Open(path)
 	if err != nil {
@@ -244,8 +291,8 @@ func detectImageSize(path string) (int, int) {
 	}
 	defer f.Close()
 
-	// Limit read to header only
-	r := io.LimitReader(f, 1024*1024) // 1MB should be enough for header
+	// #12 Read only 4KB header instead of 1MB
+	r := io.LimitReader(f, 4096)
 	cfg, _, err := image.DecodeConfig(r)
 	if err != nil {
 		return 0, 0

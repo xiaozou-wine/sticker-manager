@@ -18,8 +18,11 @@ class StorageService {
     return openDatabase(
       path,
       version: 1,
-      onCreate: (db, version) async {
+      onConfigure: (db) async {
+        // #8 FK pragma must be in onConfigure to work for all connections
         await db.execute('PRAGMA foreign_keys = ON');
+      },
+      onCreate: (db, version) async {
         await db.execute('''
           CREATE TABLE sticker_packs (
             id TEXT PRIMARY KEY,
