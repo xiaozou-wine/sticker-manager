@@ -47,8 +47,9 @@ class OverlayManager(private val context: Context) {
         val container = buildOverlayView(density, thumbSize, padding)
         overlayView = container
 
+        val screenWidth = context.resources.displayMetrics.widthPixels
         val layoutParams = WindowManager.LayoutParams(
-            WindowManager.LayoutParams.MATCH_PARENT,
+            (screenWidth * 0.8).toInt(),
             (density * 400).toInt(),
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
@@ -214,6 +215,8 @@ class OverlayManager(private val context: Context) {
         var initialY = 0
         var initialTouchX = 0f
         var initialTouchY = 0f
+        var isDragging = false
+        val dragThreshold = 10f * context.resources.displayMetrics.density
 
         view.setOnTouchListener { v, event ->
             when (event.action) {
@@ -223,14 +226,22 @@ class OverlayManager(private val context: Context) {
                     initialY = params.y
                     initialTouchX = event.rawX
                     initialTouchY = event.rawY
-                    true
+                    isDragging = false
+                    false // Don't consume - let child clicks work
                 }
                 MotionEvent.ACTION_MOVE -> {
-                    val params = v.layoutParams as WindowManager.LayoutParams
-                    params.x = initialX + (event.rawX - initialTouchX).toInt()
-                    params.y = initialY + (initialTouchY - event.rawY).toInt()
-                    windowManager.updateViewLayout(v, params)
-                    true
+                    val dx = event.rawX - initialTouchX
+                    val dy = event.rawY - initialTouchY
+                    if (!isDragging && (dx * dx + dy * dy) > dragThreshold * dragThreshold) {
+                        isDragging = true
+                    }
+                    if (isDragging) {
+                        val params = v.layoutParams as WindowManager.LayoutParams
+                        params.x = initialX + dx.toInt()
+                        params.y = initialY + (-dy).toInt()
+                        windowManager.updateViewLayout(v, params)
+                    }
+                    isDragging
                 }
                 else -> false
             }

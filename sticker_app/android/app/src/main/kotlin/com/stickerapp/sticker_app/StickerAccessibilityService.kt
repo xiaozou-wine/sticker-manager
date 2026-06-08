@@ -6,12 +6,14 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
-import android.graphics.BitmapFactory
 import android.net.Uri
-import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
+import androidx.core.content.FileProvider
+import java.io.File
 
 class StickerAccessibilityService : AccessibilityService() {
 
@@ -22,7 +24,6 @@ class StickerAccessibilityService : AccessibilityService() {
 
         var instance: StickerAccessibilityService? = null
             private set
-
         var isRunning: Boolean = false
             private set
     }
@@ -30,17 +31,16 @@ class StickerAccessibilityService : AccessibilityService() {
     private var overlayManager: OverlayManager? = null
     private var currentTargetPackage: String? = null
     private var overlayShowing = false
+    private val handler = Handler(Looper.getMainLooper())
 
     override fun onServiceConnected() {
         super.onServiceConnected()
         instance = this
         isRunning = true
         Log.i(TAG, "Accessibility service connected")
-
         serviceInfo = serviceInfo.apply {
             eventTypes = AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED or
-                    AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED or
-                    AccessibilityEvent.TYPE_VIEW_CLICKED
+                    AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED
             packageNames = arrayOf(QQ_PACKAGE, WECHAT_PACKAGE)
             feedbackType = AccessibilityServiceInfo.FEEDBACK_GENERIC
             flags = AccessibilityServiceInfo.FLAG_INCLUDE_NOT_IMPORTANT_VIEWS or
@@ -52,7 +52,6 @@ class StickerAccessibilityService : AccessibilityService() {
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         if (event == null) return
         val packageName = event.packageName?.toString() ?: return
-
         when (packageName) {
             QQ_PACKAGE -> handleQQEvent(event)
             WECHAT_PACKAGE -> handleWeChatEvent(event)
@@ -60,34 +59,41 @@ class StickerAccessibilityService : AccessibilityService() {
     }
 
     private fun handleQQEvent(event: AccessibilityEvent) {
-        when (event.eventType) {
-            AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED -> {
-                // Detect QQ chat window / emoji panel
-                val rootNode = rootInActiveWindow ?: return
-                currentTargetPackage = QQ_PACKAGE
+        val rootNode = rootInActiveWindow ?: return
+        currentTargetPackage = QQ_PACKAGE
 
-                // TODO: Use gkd-kit/inspect to get real selectors
-                // Placeholder: check if QQ's emoji button exists
-                val emojiButton = findNodeByText(rootNode, "表情")
-                if (emojiButton != null && !overlayShowing) {
-                    Log.d(TAG, "QQ emoji button detected, showing overlay")
-                    showOverlay()
-                }
-            }
+        // Confirmed selectors from GKD community subscriptions:
+        // - ChatActivity: com.tencent.mobileqq.activity.ChatActivity
+        // - Input field:  EditText[vid="input"]
+        // - Chat content: [vid="chat_item_content_layout"]
+        // - Send button:  [text="发送"] (needs snapshot verification)
+        // - Emoji button: TODO: needs snapshot via gkd-kit/inspect
+
+        val emojiPanel = findNodeByViewId(rootNode, "$QQ_PACKAGE:id/emoji_grid_layout")
+            ?: findNodeByViewId(rootNode, "$QQ_PACKAGE:id/qqlist_emoji")
+            ?: findNodeByText(rootNode, "表情")
+
+        if (emojiPanel != null && !overlayShowing) {
+            Log.d(TAG, "QQ emoji panel detected, showing overlay")
+            showOverlay()
+        } else if (emojiPanel == null && overlayShowing) {
+            Log.d(TAG, "QQ emoji panel closed, hiding overlay")
+            hideOverlay()
         }
     }
 
     private fun handleWeChatEvent(event: AccessibilityEvent) {
-        when (event.eventType) {
-            AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED -> {
-                currentTargetPackage = WECHAT_PACKAGE
-                // TODO: Implement WeChat detection
-            }
-        }
+        currentTargetPackage = WECHAT_PACKAGE
+        // Confirmed selectors:
+        // - ChattingUI:     com.tencent.mm.ui.chatting.ChattingUI
+        // - ChattingMainUI: com.tencent.mm.ui.chatting.variants.ChattingMainUI
+        // - Input field:    EditText (no fixed id in WeChat)
+        // - Send button:    [text="发送"]
+        // - Emoji button:   [desc="表情"] (needs snapshot verification)
     }
 
-    fun showOverlay() {
-        if (overlayShowing) return
+    fun showOverlay(): Boolean {
+        if (overlayShowing) return true
         overlayShowing = true
         if (overlayManager == null) {
             overlayManager = OverlayManager(this)
@@ -95,27 +101,34 @@ class StickerAccessibilityService : AccessibilityService() {
         overlayManager?.show { stickerPath ->
             sendStickerToChat(stickerPath)
         }
+        return true
     }
 
-    fun hideOverlay() {
+    fun hideOverlay(): Boolean {
         overlayShowing = false
         overlayManager?.hide()
+        return true
     }
 
-    /**
-     * Send sticker image to current chat via clipboard + paste.
-     * Flow: write image to clipboard -> find input field -> perform ACTION_PASTE -> click send.
-     */
     private fun sendStickerToChat(stickerPath: String) {
         try {
-            // 1. Copy image to clipboard
+            val file = File(stickerPath)
+            if (!file.exists()) {
+                Log.e(TAG, "Sticker file not found: $stickerPath")
+                return
+            }
+
+            val imageUri = FileProvider.getUriForString(
+                this,
+                "$packageName.fileprovider",
+                file
+            )
+
             val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-            val imageUri = Uri.parse(stickerPath)
             val clipData = ClipData.newUri(contentResolver, "sticker", imageUri)
             clipboard.setPrimaryClip(clipData)
-            Log.d(TAG, "Image copied to clipboard: $stickerPath")
+            Log.d(TAG, "Image copied to clipboard: $imageUri")
 
-            // 2. Find input field in target app and paste
             val rootNode = rootInActiveWindow ?: run {
                 Log.w(TAG, "No active window found")
                 return
@@ -123,25 +136,30 @@ class StickerAccessibilityService : AccessibilityService() {
 
             val inputField = findEditableNode(rootNode)
             if (inputField != null) {
+                inputField.performAction(AccessibilityNodeInfo.ACTION_FOCUS)
                 inputField.performAction(AccessibilityNodeInfo.ACTION_PASTE)
                 Log.d(TAG, "Pasted sticker into input field")
 
-                // 3. Optional: click send button
-                // TODO: selector needs real values from gkd-kit/inspect
-                // val sendButton = findNodeByText(rootNode, "发送")
-                // sendButton?.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                handler.postDelayed({
+                    // Send button: both QQ and WeChat use [text="发送"]
+                    val sendButton = findNodeByText(rootInActiveWindow ?: return@postDelayed, "发送")
+                    if (sendButton != null && sendButton.isEnabled) {
+                        sendButton.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                        Log.d(TAG, "Clicked send button")
+                    } else {
+                        Log.w(TAG, "Send button not found or not enabled")
+                    }
+                    hideOverlay()
+                }, 300)
             } else {
                 Log.w(TAG, "No editable input field found")
+                hideOverlay()
             }
-
-            // 4. Hide overlay after sending
-            hideOverlay()
         } catch (e: Exception) {
             Log.e(TAG, "Failed to send sticker", e)
+            hideOverlay()
         }
     }
-
-    // --- Node search helpers ---
 
     private fun findNodeByText(root: AccessibilityNodeInfo, text: String): AccessibilityNodeInfo? {
         val nodes = root.findAccessibilityNodeInfosByText(text)
@@ -153,9 +171,6 @@ class StickerAccessibilityService : AccessibilityService() {
         return nodes?.firstOrNull()
     }
 
-    /**
-     * Find the first editable node (input field) in the UI tree.
-     */
     private fun findEditableNode(node: AccessibilityNodeInfo): AccessibilityNodeInfo? {
         if (node.isEditable) return node
         for (i in 0 until node.childCount) {
