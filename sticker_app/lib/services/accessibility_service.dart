@@ -39,4 +39,13 @@ class AccessibilityService {
     final result = await _channel.invokeMethod<bool>('hideOverlay');
     return result ?? false;
   }
+
+  /// Dump the current UI tree from the accessibility service.
+  /// Returns a list of node info maps with: depth, class, text, desc, vid, id,
+  /// bounds, clickable, editable, enabled, visible, focusable, childCount.
+  static Future<List<Map<String, dynamic>>> dumpNodeTree() async {
+    final result = await _channel.invokeMethod<List>('dumpNodeTree');
+    if (result == null) return [];
+    return result.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+  }
 }

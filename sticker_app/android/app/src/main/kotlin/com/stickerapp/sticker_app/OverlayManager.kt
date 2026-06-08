@@ -17,6 +17,7 @@ import android.widget.FrameLayout
 import android.widget.GridLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
+import android.widget.ProgressBar
 import android.widget.ScrollView
 import android.widget.TextView
 import java.io.File
@@ -119,16 +120,12 @@ class OverlayManager(private val context: Context) {
             setBackgroundColor(Color.parseColor("#1AFFFFFF"))
         }
 
-        val grid = GridLayout(context).apply {
-            columnCount = GRID_COLUMNS
-            useDefaultMargins = true
-        }
+        // Load stickers grouped by pack
+        val dataHelper = StickerDataHelper(context)
+        val packs = dataHelper.getStickerPacks()
+        Log.d(TAG, "Loaded ${packs.size} sticker packs")
 
-        // Load stickers from local storage
-        val stickers = StickerDataHelper(context).getStickers()
-        Log.d(TAG, "Loaded ${stickers.size} stickers")
-
-        if (stickers.isEmpty()) {
+        if (packs.isEmpty()) {
             val emptyText = TextView(context).apply {
                 text = "暂无表情，请先在App中添加"
                 setTextColor(Color.parseColor("#99FFFFFF"))
@@ -143,16 +140,41 @@ class OverlayManager(private val context: Context) {
             ).apply { gravity = Gravity.CENTER })
             scrollView.addView(emptyLayout)
         } else {
-            for (sticker in stickers) {
-                val itemView = createStickerItem(sticker.path, thumbSize, padding)
-                val params = GridLayout.LayoutParams().apply {
-                    width = thumbSize + padding * 2
-                    height = thumbSize + padding * 2
-                    setMargins(padding / 2, padding / 2, padding / 2, padding / 2)
-                }
-                grid.addView(itemView, params)
+            val contentLayout = LinearLayout(context).apply {
+                orientation = LinearLayout.VERTICAL
             }
-            scrollView.addView(grid)
+
+            for (pack in packs) {
+                val stickers = dataHelper.getStickersByPack(pack.id)
+                if (stickers.isEmpty()) continue
+
+                // Pack header
+                val packLabel = TextView(context).apply {
+                    text = "${pack.name}（${stickers.size}）"
+                    setTextColor(Color.parseColor("#CCFFFFFF"))
+                    textSize = 13f
+                    setPadding(padding / 2, padding, padding / 2, padding / 2)
+                }
+                contentLayout.addView(packLabel)
+
+                // Sticker grid for this pack
+                val grid = GridLayout(context).apply {
+                    columnCount = GRID_COLUMNS
+                    useDefaultMargins = true
+                }
+                for (sticker in stickers) {
+                    val itemView = createStickerItem(sticker.path, thumbSize, padding)
+                    val params = GridLayout.LayoutParams().apply {
+                        width = thumbSize + padding * 2
+                        height = thumbSize + padding * 2
+                        setMargins(padding / 2, padding / 2, padding / 2, padding / 2)
+                    }
+                    grid.addView(itemView, params)
+                }
+                contentLayout.addView(grid)
+            }
+
+            scrollView.addView(contentLayout)
         }
 
         root.addView(scrollView, LinearLayout.LayoutParams(
@@ -170,12 +192,21 @@ class OverlayManager(private val context: Context) {
             setPadding(padding / 2, padding / 2, padding / 2, padding / 2)
         }
 
+        // Placeholder shown while thumbnail loads
+        val placeholder = ProgressBar(context).apply {
+            isIndeterminate = true
+            indeterminateDrawable?.setTint(Color.parseColor("#44FFFFFF"))
+        }
+        frame.addView(placeholder, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.WRAP_CONTENT,
+            FrameLayout.LayoutParams.WRAP_CONTENT
+        ).apply { gravity = Gravity.CENTER })
+
         val imageView = ImageView(context).apply {
             scaleType = ImageView.ScaleType.CENTER_CROP
             setBackgroundColor(Color.parseColor("#33FFFFFF"))
-
-            // Load thumbnail async to avoid blocking UI
-            loadThumbnailAsync(this, path, thumbSize)
+            alpha = 0f
+            loadThumbnailAsync(this, placeholder, path, thumbSize)
         }
 
         frame.addView(imageView, FrameLayout.LayoutParams(thumbSize, thumbSize))
@@ -186,7 +217,7 @@ class OverlayManager(private val context: Context) {
         return frame
     }
 
-    private fun loadThumbnailAsync(imageView: ImageView, path: String, maxSize: Int) {
+    private fun loadThumbnailAsync(imageView: ImageView, placeholder: View, path: String, maxSize: Int) {
         Thread {
             try {
                 val file = File(path)
@@ -203,9 +234,14 @@ class OverlayManager(private val context: Context) {
                 }
 
                 val bitmap = BitmapFactory.decodeFile(path, decodeOptions)
-                imageView.post { imageView.setImageBitmap(bitmap) }
+                imageView.post {
+                    imageView.setImageBitmap(bitmap)
+                    imageView.alpha = 1f
+                    placeholder.visibility = View.GONE
+                }
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to load thumbnail: $path", e)
+                imageView.post { placeholder.visibility = View.GONE }
             }
         }.start()
     }

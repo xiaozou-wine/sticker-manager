@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/accessibility_service.dart';
+import 'ui_snapshot_screen.dart';
 
 /// Settings page for configuring the accessibility service integration.
 /// Lets users check status, open system settings, and test the overlay.
@@ -10,7 +11,7 @@ class AccessibilitySettingsScreen extends StatefulWidget {
   State<AccessibilitySettingsScreen> createState() => _AccessibilitySettingsScreenState();
 }
 
-class _AccessibilitySettingsScreenState extends State<AccessibilitySettingsScreen> {
+class _AccessibilitySettingsScreenState extends State<AccessibilitySettingsScreen> with WidgetsBindingObserver {
   bool _serviceEnabled = false;
   bool _overlayPermission = false;
   bool _loading = true;
@@ -18,7 +19,22 @@ class _AccessibilitySettingsScreenState extends State<AccessibilitySettingsScree
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _refreshStatus();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Refresh status when returning from system settings
+    if (state == AppLifecycleState.resumed) {
+      _refreshStatus();
+    }
   }
 
   Future<void> _refreshStatus() async {
@@ -56,6 +72,8 @@ class _AccessibilitySettingsScreenState extends State<AccessibilitySettingsScree
                 const SizedBox(height: 16),
                 _buildSetupSection(),
                 const SizedBox(height: 16),
+                if (_serviceEnabled) _buildSnapshotButton(),
+                if (_serviceEnabled) const SizedBox(height: 16),
                 _buildHowItWorks(),
                 const SizedBox(height: 16),
                 _buildSupportedApps(),
@@ -110,8 +128,6 @@ class _AccessibilitySettingsScreenState extends State<AccessibilitySettingsScree
           done: _overlayPermission,
           onTap: () async {
             await AccessibilityService.openOverlayPermissionSettings();
-            // Refresh when user comes back
-            if (mounted) _refreshStatus();
           },
         ),
         _buildStep(
@@ -121,10 +137,25 @@ class _AccessibilitySettingsScreenState extends State<AccessibilitySettingsScree
           done: _serviceEnabled,
           onTap: () async {
             await AccessibilityService.openAccessibilitySettings();
-            if (mounted) _refreshStatus();
           },
         ),
       ],
+    );
+  }
+
+  Widget _buildSnapshotButton() {
+    return Card(
+      color: Colors.blue[50],
+      child: ListTile(
+        leading: Icon(Icons.camera_alt, color: Colors.blue[700]),
+        title: const Text('抓取 UI 节点树'),
+        subtitle: const Text('打开 QQ/微信聊天窗口后，点击这里查看界面节点'),
+        trailing: const Icon(Icons.chevron_right),
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const UISnapshotScreen()),
+        ),
+      ),
     );
   }
 

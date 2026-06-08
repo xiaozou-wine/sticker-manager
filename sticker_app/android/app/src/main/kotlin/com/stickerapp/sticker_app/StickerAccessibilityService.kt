@@ -10,6 +10,7 @@ import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
+import android.widget.Toast
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import androidx.core.content.FileProvider
@@ -115,10 +116,11 @@ class StickerAccessibilityService : AccessibilityService() {
             val file = File(stickerPath)
             if (!file.exists()) {
                 Log.e(TAG, "Sticker file not found: $stickerPath")
+                Toast.makeText(this, "表情文件不存在", Toast.LENGTH_SHORT).show()
                 return
             }
 
-            val imageUri = FileProvider.getUriForString(
+            val imageUri = FileProvider.getUriForFile(
                 this,
                 "$packageName.fileprovider",
                 file
@@ -131,6 +133,7 @@ class StickerAccessibilityService : AccessibilityService() {
 
             val rootNode = rootInActiveWindow ?: run {
                 Log.w(TAG, "No active window found")
+                Toast.makeText(this, "发送失败，请重试", Toast.LENGTH_SHORT).show()
                 return
             }
 
@@ -146,17 +149,21 @@ class StickerAccessibilityService : AccessibilityService() {
                     if (sendButton != null && sendButton.isEnabled) {
                         sendButton.performAction(AccessibilityNodeInfo.ACTION_CLICK)
                         Log.d(TAG, "Clicked send button")
+                        handler.post { Toast.makeText(this, "表情已发送", Toast.LENGTH_SHORT).show() }
                     } else {
                         Log.w(TAG, "Send button not found or not enabled")
+                        handler.post { Toast.makeText(this, "发送失败，请重试", Toast.LENGTH_SHORT).show() }
                     }
                     hideOverlay()
                 }, 300)
             } else {
                 Log.w(TAG, "No editable input field found")
+                Toast.makeText(this, "发送失败，未找到输入框", Toast.LENGTH_SHORT).show()
                 hideOverlay()
             }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to send sticker", e)
+            Toast.makeText(this, "发送失败，请重试", Toast.LENGTH_SHORT).show()
             hideOverlay()
         }
     }
@@ -179,6 +186,52 @@ class StickerAccessibilityService : AccessibilityService() {
             if (result != null) return result
         }
         return null
+    }
+
+    /**
+     * Dump the current UI tree as a list of node info maps.
+     * Each node contains: class, text, desc, vid, id, bounds, clickable, editable, depth.
+     * Used for in-app UI inspection without ADB.
+     */
+    fun dumpNodeTree(): List<Map<String, Any?>> {
+        val rootNode = rootInActiveWindow ?: return emptyList()
+        val nodes = mutableListOf<Map<String, Any?>>()
+        traverseNode(rootNode, 0, nodes)
+        return nodes
+    }
+
+    private fun traverseNode(
+        node: AccessibilityNodeInfo,
+        depth: Int,
+        result: MutableList<Map<String, Any?>>
+    ) {
+        val bounds = android.graphics.Rect()
+        node.getBoundsInScreen(bounds)
+
+        val info = mapOf(
+            "depth" to depth,
+            "class" to (node.className?.toString() ?: ""),
+            "text" to (node.text?.toString() ?: ""),
+            "desc" to (node.contentDescription?.toString() ?: ""),
+            "vid" to (node.viewIdResourceName?.let {
+                it.substringAfter("/", it)
+            } ?: ""),
+            "id" to (node.viewIdResourceName ?: ""),
+            "bounds" to "[${bounds.left},${bounds.top},${bounds.right},${bounds.bottom}]",
+            "clickable" to node.isClickable,
+            "longClickable" to node.isLongClickable,
+            "editable" to node.isEditable,
+            "enabled" to node.isEnabled,
+            "visible" to node.isVisibleToUser,
+            "focusable" to node.isFocusable,
+            "childCount" to node.childCount
+        )
+        result.add(info)
+
+        for (i in 0 until node.childCount) {
+            val child = node.getChild(i) ?: continue
+            traverseNode(child, depth + 1, result)
+        }
     }
 
     override fun onInterrupt() {

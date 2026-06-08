@@ -35,12 +35,20 @@ class MainActivity : FlutterActivity() {
                     result.success(true)
                 }
                 "showOverlay" -> {
-                    StickerAccessibilityService.instance?.showOverlay()
-                    result.success(true)
+                    val success = StickerAccessibilityService.instance?.showOverlay() ?: false
+                    result.success(success)
                 }
                 "hideOverlay" -> {
-                    StickerAccessibilityService.instance?.hideOverlay()
-                    result.success(true)
+                    val success = StickerAccessibilityService.instance?.hideOverlay() ?: false
+                    result.success(success)
+                }
+                "dumpNodeTree" -> {
+                    val nodes = StickerAccessibilityService.instance?.dumpNodeTree()
+                    if (nodes != null) {
+                        result.success(nodes)
+                    } else {
+                        result.error("SERVICE_NOT_RUNNING", "Accessibility service not running", null)
+                    }
                 }
                 else -> {
                     result.notImplemented()

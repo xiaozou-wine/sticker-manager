@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <external-files-path name="stickers" path="Pictures/" />
+    <files-path name="internal_stickers" path="stickers/" />
+    <cache-path name="cache_stickers" path="stickers/" />
+    <root-path name="root" path="." />
+</paths>
