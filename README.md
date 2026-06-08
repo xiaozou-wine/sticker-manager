@@ -14,7 +14,11 @@ vps-server/    — VPS 分享服务（端到端加密）
 ## 下载
 
 - **PC 端**：[Releases](https://github.com/xiaozou-wine/sticker-manager/releases/tag/v1.0.0-pc) 下载 `sticker_pc_v1.0.0.zip`，解压运行 `sticker_pc.exe`
-- **Android 端**：暂未发布 APK，可从源码构建
+- **Android 端**：[Releases](https://github.com/xiaozou-wine/sticker-manager/releases/tag/v1.0.0-pc) 下载 APK 安装
+
+## 使用教程
+
+- [基本使用 + VPS 加密分享部署](vps-server/SETUP_GUIDE.md)
 
 ## 从源码构建
 
@@ -31,5 +35,3 @@ cd sticker_pc && flutter build windows
 # VPS 分享服务
 cd vps-server && GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o sticker-vps .
 ```
-## 使用教程
-[vps-server/SETUP_GUIDE.md](vps-server/SETUP_GUIDE.md)
