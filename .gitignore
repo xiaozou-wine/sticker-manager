@@ -13,3 +13,4 @@ sticker_app/android/build/
 vps-server/data/
 vps-server/sticker-vps
 vps-server/.env
+CLAUDE.md
