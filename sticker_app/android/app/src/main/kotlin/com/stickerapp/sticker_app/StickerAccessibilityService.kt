@@ -30,6 +30,7 @@ class StickerAccessibilityService : AccessibilityService() {
     }
 
     private var overlayManager: OverlayManager? = null
+    private var triggerButton: TriggerButton? = null
     private var currentTargetPackage: String? = null
     private var overlayShowing = false
     private val handler = Handler(Looper.getMainLooper())
@@ -39,58 +40,42 @@ class StickerAccessibilityService : AccessibilityService() {
         instance = this
         isRunning = true
         Log.i(TAG, "Accessibility service connected")
+
         serviceInfo = serviceInfo.apply {
-            eventTypes = AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED or
-                    AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED
+            eventTypes = AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED
             packageNames = arrayOf(QQ_PACKAGE, WECHAT_PACKAGE)
             feedbackType = AccessibilityServiceInfo.FEEDBACK_GENERIC
             flags = AccessibilityServiceInfo.FLAG_INCLUDE_NOT_IMPORTANT_VIEWS or
                     AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS
-            notificationTimeout = 100
+            notificationTimeout = 200
         }
+
+        // Show persistent trigger button when service starts
+        handler.post { showTriggerButton() }
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         if (event == null) return
         val packageName = event.packageName?.toString() ?: return
-        when (packageName) {
-            QQ_PACKAGE -> handleQQEvent(event)
-            WECHAT_PACKAGE -> handleWeChatEvent(event)
+
+        // Only track which app is in foreground, no auto-detection
+        if (packageName == QQ_PACKAGE || packageName == WECHAT_PACKAGE) {
+            currentTargetPackage = packageName
         }
     }
 
-    private fun handleQQEvent(event: AccessibilityEvent) {
-        val rootNode = rootInActiveWindow ?: return
-        currentTargetPackage = QQ_PACKAGE
-
-        // Confirmed selectors from GKD community subscriptions:
-        // - ChatActivity: com.tencent.mobileqq.activity.ChatActivity
-        // - Input field:  EditText[vid="input"]
-        // - Chat content: [vid="chat_item_content_layout"]
-        // - Send button:  [text="发送"] (needs snapshot verification)
-        // - Emoji button: TODO: needs snapshot via gkd-kit/inspect
-
-        val emojiPanel = findNodeByViewId(rootNode, "$QQ_PACKAGE:id/emoji_grid_layout")
-            ?: findNodeByViewId(rootNode, "$QQ_PACKAGE:id/qqlist_emoji")
-            ?: findNodeByText(rootNode, "表情")
-
-        if (emojiPanel != null && !overlayShowing) {
-            Log.d(TAG, "QQ emoji panel detected, showing overlay")
-            showOverlay()
-        } else if (emojiPanel == null && overlayShowing) {
-            Log.d(TAG, "QQ emoji panel closed, hiding overlay")
-            hideOverlay()
+    fun showTriggerButton() {
+        if (triggerButton == null) {
+            triggerButton = TriggerButton(this) {
+                showOverlay()
+            }
         }
+        triggerButton?.show()
     }
 
-    private fun handleWeChatEvent(event: AccessibilityEvent) {
-        currentTargetPackage = WECHAT_PACKAGE
-        // Confirmed selectors:
-        // - ChattingUI:     com.tencent.mm.ui.chatting.ChattingUI
-        // - ChattingMainUI: com.tencent.mm.ui.chatting.variants.ChattingMainUI
-        // - Input field:    EditText (no fixed id in WeChat)
-        // - Send button:    [text="发送"]
-        // - Emoji button:   [desc="表情"] (needs snapshot verification)
+    fun hideTriggerButton() {
+        triggerButton?.hide()
+        triggerButton = null
     }
 
     fun showOverlay(): Boolean {
@@ -126,41 +111,55 @@ class StickerAccessibilityService : AccessibilityService() {
                 file
             )
 
+            // Method 1: Try clipboard + paste
             val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
             val clipData = ClipData.newUri(contentResolver, "sticker", imageUri)
             clipboard.setPrimaryClip(clipData)
             Log.d(TAG, "Image copied to clipboard: $imageUri")
 
-            val rootNode = rootInActiveWindow ?: run {
-                Log.w(TAG, "No active window found")
-                Toast.makeText(this, "发送失败，请重试", Toast.LENGTH_SHORT).show()
-                return
+            val rootNode = rootInActiveWindow
+            if (rootNode != null) {
+                val inputField = findEditableNode(rootNode)
+                if (inputField != null) {
+                    inputField.performAction(AccessibilityNodeInfo.ACTION_FOCUS)
+                    handler.postDelayed({
+                        inputField.performAction(AccessibilityNodeInfo.ACTION_PASTE)
+                        Log.d(TAG, "Pasted sticker into input field")
+
+                        handler.postDelayed({
+                            val sendButton = findNodeByText(rootInActiveWindow ?: return@postDelayed, "发送")
+                            if (sendButton != null && sendButton.isEnabled) {
+                                sendButton.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                                Log.d(TAG, "Clicked send button")
+                                handler.post { Toast.makeText(this, "表情已发送", Toast.LENGTH_SHORT).show() }
+                            } else {
+                                Log.w(TAG, "Send button not found or not enabled - image copied to clipboard, paste manually")
+                                handler.post { Toast.makeText(this, "已复制到剪贴板，请手动粘贴发送", Toast.LENGTH_LONG).show() }
+                            }
+                            hideOverlay()
+                        }, 500)
+                    }, 200)
+                    return
+                }
             }
 
-            val inputField = findEditableNode(rootNode)
-            if (inputField != null) {
-                inputField.performAction(AccessibilityNodeInfo.ACTION_FOCUS)
-                inputField.performAction(AccessibilityNodeInfo.ACTION_PASTE)
-                Log.d(TAG, "Pasted sticker into input field")
-
-                handler.postDelayed({
-                    // Send button: both QQ and WeChat use [text="发送"]
-                    val sendButton = findNodeByText(rootInActiveWindow ?: return@postDelayed, "发送")
-                    if (sendButton != null && sendButton.isEnabled) {
-                        sendButton.performAction(AccessibilityNodeInfo.ACTION_CLICK)
-                        Log.d(TAG, "Clicked send button")
-                        handler.post { Toast.makeText(this, "表情已发送", Toast.LENGTH_SHORT).show() }
-                    } else {
-                        Log.w(TAG, "Send button not found or not enabled")
-                        handler.post { Toast.makeText(this, "发送失败，请重试", Toast.LENGTH_SHORT).show() }
-                    }
-                    hideOverlay()
-                }, 300)
-            } else {
-                Log.w(TAG, "No editable input field found")
-                Toast.makeText(this, "发送失败，未找到输入框", Toast.LENGTH_SHORT).show()
-                hideOverlay()
+            // Method 2: Fallback - use ACTION_SEND
+            Log.d(TAG, "No input field found, falling back to ACTION_SEND")
+            val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                type = "image/*"
+                putExtra(Intent.EXTRA_STREAM, imageUri)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                setPackage(currentTargetPackage)
             }
+            try {
+                startActivity(shareIntent)
+                handler.post { Toast.makeText(this, "选择聊天发送表情", Toast.LENGTH_SHORT).show() }
+            } catch (e: Exception) {
+                Log.e(TAG, "ACTION_SEND failed, copying to clipboard", e)
+                handler.post { Toast.makeText(this, "已复制到剪贴板，请手动粘贴发送", Toast.LENGTH_LONG).show() }
+            }
+            hideOverlay()
         } catch (e: Exception) {
             Log.e(TAG, "Failed to send sticker", e)
             Toast.makeText(this, "发送失败，请重试", Toast.LENGTH_SHORT).show()
