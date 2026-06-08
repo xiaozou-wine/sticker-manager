@@ -133,9 +133,7 @@ class _GalleryPickerScreenState extends State<GalleryPickerScreen> {
           maxAssets: 50,
           requestType: RequestType.image,
           selectedAssets: _selectedAssets,
-          filterOptions: FilterOptionGroup(
-            containsLivePhotos: false,
-          ),
+          filterOptions: FilterOptionGroup(),
         ),
       );
 

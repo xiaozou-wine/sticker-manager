@@ -7,7 +7,7 @@ class Sticker {
   final int sizeBytes;
   final String extension;
   final DateTime createdAt;
-  String? localPath;
+  final String? localPath;
 
   Sticker({
     required this.id,

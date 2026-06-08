@@ -38,6 +38,7 @@ class DownloadService {
 
     // Download each sticker
     final stickers = <Sticker>[];
+    final failedIds = <String>[];
     for (int i = 0; i < remoteStickers.length; i++) {
       final remote = remoteStickers[i];
       try {
@@ -58,7 +59,7 @@ class DownloadService {
         stickers.add(sticker);
         onProgress?.call(i + 1, remoteStickers.length);
       } catch (e) {
-        // Skip failed downloads
+        failedIds.add(remote.id);
         continue;
       }
     }
@@ -74,7 +75,11 @@ class DownloadService {
       await storageService.updatePack(pack);
     }
 
-    return DownloadResult(packId: pack.id, stickerCount: stickers.length);
+    return DownloadResult(
+      packId: pack.id,
+      stickerCount: stickers.length,
+      failedCount: failedIds.length,
+    );
   }
 
   String _getExtension(String url) {
@@ -89,6 +94,7 @@ class DownloadService {
 class DownloadResult {
   final String packId;
   final int stickerCount;
+  final int failedCount;
 
-  DownloadResult({required this.packId, required this.stickerCount});
+  DownloadResult({required this.packId, required this.stickerCount, this.failedCount = 0});
 }

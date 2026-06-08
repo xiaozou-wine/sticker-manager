@@ -33,14 +33,11 @@ class StickerTile extends StatelessWidget {
 
   Widget _buildImage() {
     if (localPath != null && localPath!.isNotEmpty) {
-      final file = File(localPath!);
-      if (file.existsSync()) {
-        return Image.file(
-          file,
-          fit: BoxFit.cover,
-          errorBuilder: (_, __, ___) => _buildPlaceholder(),
-        );
-      }
+      return Image.file(
+        File(localPath!),
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => _buildPlaceholder(),
+      );
     }
 
     if (imageUrl != null && imageUrl!.isNotEmpty) {

@@ -7,22 +7,26 @@ class StickerProvider extends ChangeNotifier {
 
   List<Sticker> _stickers = [];
   bool _isLoading = false;
+  String? _error;
   String? _currentPackId;
 
   StickerProvider(this._storage);
 
   List<Sticker> get stickers => _stickers;
   bool get isLoading => _isLoading;
+  String? get error => _error;
 
   Future<void> loadStickers(String packId) async {
     _currentPackId = packId;
     _isLoading = true;
+    _error = null;
     notifyListeners();
 
     try {
       _stickers = await _storage.getStickersByPackId(packId);
     } catch (e) {
       _stickers = [];
+      _error = e.toString();
     } finally {
       _isLoading = false;
       notifyListeners();

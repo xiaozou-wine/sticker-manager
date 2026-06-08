@@ -18,9 +18,7 @@ class GalleryService {
       pickerConfig: AssetPickerConfig(
         maxAssets: maxCount,
         requestType: RequestType.image,
-        filterOptions: FilterOptionGroup(
-          containsLivePhotos: false,
-        ),
+        filterOptions: FilterOptionGroup(),
       ),
     );
 

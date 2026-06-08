@@ -21,6 +21,8 @@ class PackDetailScreen extends StatefulWidget {
 }
 
 class _PackDetailScreenState extends State<PackDetailScreen> {
+  bool _isImporting = false;
+
   @override
   void initState() {
     super.initState();
@@ -33,37 +35,46 @@ class _PackDetailScreenState extends State<PackDetailScreen> {
   }
 
   Future<void> _importFiles(List<File> files) async {
+    setState(() => _isImporting = true);
     final provider = context.read<StickerProvider>();
-    final appDir = await getApplicationDocumentsDirectory();
-    final packDir = Directory(p.join(appDir.path, 'stickers', widget.pack.id));
-    if (!await packDir.exists()) {
-      await packDir.create(recursive: true);
-    }
+    final packProvider = context.read<PackProvider>();
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final appDir = await getApplicationDocumentsDirectory();
+      final packDir = Directory(p.join(appDir.path, 'stickers', widget.pack.id));
+      if (!await packDir.exists()) {
+        await packDir.create(recursive: true);
+      }
 
-    final stickers = <Sticker>[];
-    for (int i = 0; i < files.length; i++) {
-      final file = files[i];
-      final ext = p.extension(file.path).toLowerCase();
-      final stickerId = '${widget.pack.id}_${DateTime.now().microsecondsSinceEpoch}_$i';
-      final savePath = p.join(packDir.path, '$stickerId$ext');
-      await file.copy(savePath);
+      final stickers = <Sticker>[];
+      for (int i = 0; i < files.length; i++) {
+        final file = files[i];
+        final ext = p.extension(file.path).toLowerCase();
+        final stickerId = '${widget.pack.id}_${DateTime.now().microsecondsSinceEpoch}_$i';
+        final savePath = p.join(packDir.path, '$stickerId$ext');
+        await file.copy(savePath);
 
-      final sticker = Sticker(
-        id: stickerId,
-        packId: widget.pack.id,
-        type: ext == '.gif' ? 'gif' : 'image',
-        extension: ext.isEmpty ? '.png' : ext,
-        localPath: savePath,
-      );
-      stickers.add(sticker);
-    }
+        final sticker = Sticker(
+          id: stickerId,
+          packId: widget.pack.id,
+          type: ext == '.gif' ? 'gif' : 'image',
+          extension: ext.isEmpty ? '.png' : ext,
+          localPath: savePath,
+        );
+        stickers.add(sticker);
+      }
 
-    await provider.addStickers(widget.pack.id, stickers);
-    if (mounted) {
-      context.read<PackProvider>().refreshPack(widget.pack.id);
-      ScaffoldMessenger.of(context).showSnackBar(
+      await provider.addStickers(widget.pack.id, stickers);
+      packProvider.refreshPack(widget.pack.id);
+      messenger.showSnackBar(
         SnackBar(content: Text('已添加 ${stickers.length} 个表情')),
       );
+    } catch (e) {
+      messenger.showSnackBar(
+        SnackBar(content: Text('导入失败: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _isImporting = false);
     }
   }
 
@@ -73,11 +84,17 @@ class _PackDetailScreenState extends State<PackDetailScreen> {
       appBar: AppBar(
         title: Text(widget.pack.name),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.add_photo_alternate),
-            onPressed: _addMore,
-            tooltip: '添加表情',
-          ),
+          if (_isImporting)
+            const Padding(
+              padding: EdgeInsets.all(16),
+              child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
+            )
+          else
+            IconButton(
+              icon: const Icon(Icons.add_photo_alternate),
+              onPressed: _addMore,
+              tooltip: '添加表情',
+            ),
         ],
       ),
       body: Consumer<StickerProvider>(
@@ -101,6 +118,7 @@ class _PackDetailScreenState extends State<PackDetailScreen> {
         builder: (_) => GalleryPickerScreen(targetPackId: widget.pack.id),
       ),
     );
+    if (!context.mounted) return;
     if (result != null && result.isNotEmpty) {
       _importFiles(result);
     }

@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:uuid/uuid.dart';
 import '../models/sticker_pack.dart';
 import '../services/storage_service.dart';
 
@@ -32,7 +33,7 @@ class PackProvider extends ChangeNotifier {
 
   Future<StickerPack> createPack(String name, {String description = ''}) async {
     final pack = StickerPack(
-      id: DateTime.now().microsecondsSinceEpoch.toString(),
+      id: const Uuid().v4(),
       name: name,
       description: description,
     );

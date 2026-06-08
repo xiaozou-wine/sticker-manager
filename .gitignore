@@ -5,3 +5,5 @@ sticker_app/build/
 sticker_app/.dart_tool/
 *.lock
 
+
+server/sticker-server-*

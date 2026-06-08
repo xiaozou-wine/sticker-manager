@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../config.dart';
 import '../services/api_service.dart';
 import '../services/download_service.dart';
 import '../providers/pack_provider.dart';
@@ -83,13 +84,14 @@ class _ImportLinkScreenState extends State<ImportLinkScreen> {
     if (code.isEmpty) return;
     setState(() { _isLoading = true; _error = null; _preview = null; });
     try {
-      final api = ApiService(baseUrl: 'http://localhost:8080');
+      final api = ApiService(baseUrl: AppConfig.apiBaseUrl);
       final pack = await api.getPackByCode(code);
+      if (!mounted) return;
       setState(() { _preview = StickerPackPreview(name: pack.name, count: pack.stickerCount, code: code); });
     } catch (e) {
-      setState(() { _error = '查找失败: 请检查分享码是否正确'; });
+      if (mounted) setState(() { _error = '查找失败: 请检查分享码是否正确'; });
     } finally {
-      setState(() { _isLoading = false; });
+      if (mounted) setState(() { _isLoading = false; });
     }
   }
 
@@ -98,26 +100,28 @@ class _ImportLinkScreenState extends State<ImportLinkScreen> {
     setState(() { _isDownloading = true; _downloadProgress = 0; });
     try {
       final storage = context.read<StorageService>();
-      final api = ApiService(baseUrl: 'http://localhost:8080');
+      final packProvider = context.read<PackProvider>();
+      final messenger = ScaffoldMessenger.of(context);
+      final api = ApiService(baseUrl: AppConfig.apiBaseUrl);
       final dl = DownloadService(apiService: api, storageService: storage);
       final result = await dl.downloadPack(
         shareCode: _preview!.code,
         packName: _preview!.name,
         onProgress: (done, total) {
-          setState(() { _downloadProgress = done / total; });
+          if (mounted) setState(() { _downloadProgress = done / total; });
         },
       );
-      if (mounted) {
-        context.read<PackProvider>().loadPacks();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('下载完成，共 ${result.stickerCount} 个表情')),
-        );
-        Navigator.pop(context);
-      }
+      if (!mounted) return;
+      final msg = result.failedCount > 0
+          ? '下载完成，${result.stickerCount} 个成功，${result.failedCount} 个失败'
+          : '下载完成，共 ${result.stickerCount} 个表情';
+      packProvider.loadPacks();
+      messenger.showSnackBar(SnackBar(content: Text(msg)));
+      Navigator.pop(context);
     } catch (e) {
-      setState(() { _error = '下载失败: $e'; });
+      if (mounted) setState(() { _error = '下载失败: $e'; });
     } finally {
-      setState(() { _isDownloading = false; });
+      if (mounted) setState(() { _isDownloading = false; });
     }
   }
 

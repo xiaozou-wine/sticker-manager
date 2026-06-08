@@ -8,7 +8,7 @@ class StickerPack {
   String? shareCode;
   bool isUploaded;
   int stickerCount;
-  DateTime createdAt;
+  final DateTime createdAt;
   DateTime updatedAt;
 
   StickerPack({

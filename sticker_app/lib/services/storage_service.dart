@@ -19,6 +19,7 @@ class StorageService {
       path,
       version: 1,
       onCreate: (db, version) async {
+        await db.execute('PRAGMA foreign_keys = ON');
         await db.execute('''
           CREATE TABLE sticker_packs (
             id TEXT PRIMARY KEY,
@@ -90,12 +91,6 @@ class StorageService {
   }
 
   // --- Sticker CRUD ---
-
-  Future<void> insertSticker(Sticker sticker) async {
-    final db = await database;
-    await db.insert('stickers', sticker.toMap(),
-        conflictAlgorithm: ConflictAlgorithm.replace);
-  }
 
   Future<void> insertStickers(List<Sticker> stickers) async {
     final db = await database;

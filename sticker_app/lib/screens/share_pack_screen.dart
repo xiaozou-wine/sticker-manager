@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import '../config.dart';
 import '../models/sticker_pack.dart';
 import '../services/api_service.dart';
 import '../services/storage_service.dart';
@@ -96,7 +97,7 @@ class _SharePackScreenState extends State<SharePackScreen> {
         setState(() { _error = '没有可上传的本地表情文件'; });
         return;
       }
-      final api = ApiService(baseUrl: 'http://localhost:8080');
+      final api = ApiService(baseUrl: AppConfig.apiBaseUrl);
       final result = await api.uploadPack(
         name: widget.pack.name,
         description: widget.pack.description,

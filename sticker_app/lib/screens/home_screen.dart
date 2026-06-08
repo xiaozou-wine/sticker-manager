@@ -97,7 +97,8 @@ class _HomeScreenState extends State<HomeScreen> {
       context,
       MaterialPageRoute(builder: (_) => const GalleryPickerScreen()),
     );
-    if (result != null && result.isNotEmpty && mounted) {
+    if (result != null && result.isNotEmpty) {
+      if (!context.mounted) return;
       _showCreatePackDialog(context, result);
     }
   }
@@ -107,8 +108,9 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _openPackDetail(BuildContext context, StickerPack pack) {
+    final provider = context.read<PackProvider>();
     Navigator.push(context, MaterialPageRoute(builder: (_) => PackDetailScreen(pack: pack)))
-        .then((_) { if (mounted) context.read<PackProvider>().loadPacks(); });
+        .then((_) => provider.loadPacks());
   }
 
   void _sharePack(BuildContext context, StickerPack pack) {
@@ -153,11 +155,10 @@ class _HomeScreenState extends State<HomeScreen> {
               Navigator.pop(ctx);
               final provider = context.read<PackProvider>();
               final pack = await provider.createPack(name);
-              if (mounted) {
-                Navigator.push(context, MaterialPageRoute(
-                  builder: (_) => PackDetailScreen(pack: pack, initialFiles: files),
-                )).then((_) => provider.loadPacks());
-              }
+              if (!context.mounted) return;
+              Navigator.push(context, MaterialPageRoute(
+                builder: (_) => PackDetailScreen(pack: pack, initialFiles: files),
+              )).then((_) => provider.loadPacks());
             },
             child: const Text('创建'),
           ),
@@ -207,14 +208,21 @@ class _PackCard extends StatelessWidget {
 
   Widget _buildCover() {
     if (pack.coverLocal != null && pack.coverLocal!.isNotEmpty) {
-      final file = File(pack.coverLocal!);
-      if (file.existsSync()) {
-        return ClipRRect(
-          borderRadius: BorderRadius.circular(8),
-          child: Image.file(file, width: 56, height: 56, fit: BoxFit.cover),
-        );
-      }
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(8),
+        child: Image.file(
+          File(pack.coverLocal!),
+          width: 56,
+          height: 56,
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => _buildPlaceholder(),
+        ),
+      );
     }
+    return _buildPlaceholder();
+  }
+
+  Widget _buildPlaceholder() {
     return Container(
       width: 56, height: 56,
       decoration: BoxDecoration(color: Colors.grey[200], borderRadius: BorderRadius.circular(8)),
