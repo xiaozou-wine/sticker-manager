@@ -28,6 +28,15 @@ class _SharePackScreenState extends State<SharePackScreen> {
   String? _vpsShareLink;
 
   @override
+  void initState() {
+    super.initState();
+    // 恢复已有的分享码
+    if (widget.pack.shareCode != null && widget.pack.shareCode!.isNotEmpty) {
+      _shareCode = widget.pack.shareCode;
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('分享表情包')),
@@ -275,6 +284,13 @@ class _SharePackScreenState extends State<SharePackScreen> {
           shareCode: (result.pack.shareCode ?? "unknown"),
           key: key,
         );
+
+        // 保存分享码到本地
+        widget.pack.shareCode = result.pack.shareCode;
+        widget.pack.isUploaded = true;
+        if (!mounted) return;
+        final storage2 = context.read<StorageService>();
+        await storage2.updatePack(widget.pack);
 
         setState(() { _vpsShareLink = link; });
       } finally {
