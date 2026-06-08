@@ -1,0 +1,7 @@
+server/data/
+server/static/stickers/
+server/sticker-server.exe
+sticker_app/build/
+sticker_app/.dart_tool/
+*.lock
+
