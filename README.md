@@ -39,3 +39,7 @@ cd sticker_pc && flutter build windows
 # VPS 分享服务
 cd vps-server && GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o sticker-vps .
 ```
+
+## 参与贡献
+
+欢迎分享你的表情包分享链接到 [DEMO.md](DEMO.md)，欢迎提 [Issue](https://github.com/xiaozou-wine/sticker-manager/issues) 和 [PR](https://github.com/xiaozou-wine/sticker-manager/pulls)！
