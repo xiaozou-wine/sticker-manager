@@ -85,20 +85,20 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  void _showAddOptions(BuildContext context) {
+  void _showAddOptions(BuildContext homeContext) {
     showModalBottomSheet(
-      context: context,
+      context: homeContext,
       builder: (context) => SafeArea(
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           ListTile(
             leading: const Icon(Icons.folder_open),
             title: const Text('从文件添加'),
-            onTap: () { Navigator.pop(context); _addFromFiles(context); },
+            onTap: () { Navigator.pop(context); _addFromFiles(homeContext); },
           ),
           ListTile(
             leading: const Icon(Icons.link),
             title: const Text('从链接导入'),
-            onTap: () { Navigator.pop(context); _importFromLink(context); },
+            onTap: () { Navigator.pop(context); _importFromLink(homeContext); },
           ),
         ]),
       ),

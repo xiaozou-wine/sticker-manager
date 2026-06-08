@@ -76,21 +76,21 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  void _showAddOptions(BuildContext context) {
+  void _showAddOptions(BuildContext homeContext) {
     final isDesktop = ClipboardService.isDesktop;
     showModalBottomSheet(
-      context: context,
+      context: homeContext,
       builder: (context) => SafeArea(
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           ListTile(
             leading: Icon(isDesktop ? Icons.folder_open : Icons.photo_library),
             title: Text(isDesktop ? '从文件添加' : '从相册添加'),
-            onTap: () { Navigator.pop(context); _addFromGallery(context); },
+            onTap: () { Navigator.pop(context); _addFromGallery(homeContext); },
           ),
           ListTile(
             leading: const Icon(Icons.link),
             title: const Text('从链接导入'),
-            onTap: () { Navigator.pop(context); _importFromLink(context); },
+            onTap: () { Navigator.pop(context); _importFromLink(homeContext); },
           ),
         ]),
       ),
