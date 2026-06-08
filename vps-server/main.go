@@ -108,7 +108,7 @@ func createPack(db *DB, staticDir string) gin.HandlerFunc {
 		}
 		if len(files) > 100 {
 			db.DeletePack(pack.ID)
-			c.JSON(400, gin.H{"error": "max 100 stickers"})
+			c.JSON(400, gin.H{"error": "max 200 stickers"})
 			return
 		}
 

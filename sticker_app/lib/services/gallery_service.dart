@@ -6,7 +6,7 @@ import 'package:permission_handler/permission_handler.dart';
 class GalleryService {
   /// Pick multiple images/GIFs from gallery
   /// Returns list of File paths
-  Future<List<File>> pickImages({int maxCount = 50}) async {
+  Future<List<File>> pickImages({int maxCount = 200}) async {
     // Request permission
     final status = await Permission.photos.request();
     if (!status.isGranted) {

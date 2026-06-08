@@ -55,8 +55,8 @@ func (h *PackHandler) CreatePack(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "at least one sticker file required"})
 		return
 	}
-	if len(files) > 50 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "max 50 stickers per upload"})
+	if len(files) > 200 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "max 200 stickers per upload"})
 		return
 	}
 
