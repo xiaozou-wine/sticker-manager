@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
-import 'package:file_picker/file_picker.dart' as fp;
+import 'package:gal/gal.dart';
 import '../providers/sticker_provider.dart';
 import '../providers/pack_provider.dart';
 import '../models/sticker_pack.dart';
@@ -241,11 +241,6 @@ class _PackDetailScreenState extends State<PackDetailScreen> {
   }
 
   Future<void> _exportToFolder() async {
-    final dir = await fp.FilePicker.platform.getDirectoryPath(
-      dialogTitle: '选择导出目录',
-    );
-    if (dir == null) return;
-
     final provider = context.read<StickerProvider>();
     final count = provider.stickers.length;
     if (count == 0) {
@@ -268,46 +263,24 @@ class _PackDetailScreenState extends State<PackDetailScreen> {
     int failed = 0;
 
     try {
-      final exportDir = Directory(p.join(dir, widget.pack.name));
-      if (!await exportDir.exists()) {
-        await exportDir.create(recursive: true);
-      }
-
       for (int i = 0; i < provider.stickers.length; i++) {
         final sticker = provider.stickers[i];
-        if (sticker.localPath != null) {
-          try {
-            final src = File(sticker.localPath!);
-            if (await src.exists()) {
-              final ext = p.extension(sticker.localPath!);
-              await src.copy(p.join(exportDir.path, '${sticker.id}$ext'));
-              saved++;
-            } else {
-              failed++;
-            }
-          } catch (_) {
-            failed++;
-          }
-        } else {
+        if (sticker.localPath == null) { failed++; continue; }
+        try {
+          await Gal.putImage(sticker.localPath!, album: 'StickerApp/${widget.pack.name}');
+          saved++;
+        } catch (_) {
           failed++;
         }
         if (mounted) {
-          setState(() {
-            _saveCurrent = i + 1;
-          });
+          setState(() { _saveCurrent = i + 1; });
         }
       }
 
       if (!mounted) return;
-      if (failed == 0) {
-        messenger.showSnackBar(
-          SnackBar(content: Text('已导出 $saved 个表情到 ${exportDir.path}')),
-        );
-      } else {
-        messenger.showSnackBar(
-          SnackBar(content: Text('导出完成：成功 $saved 个，失败 $failed 个')),
-        );
-      }
+      messenger.showSnackBar(
+        SnackBar(content: Text('已保存 $saved 个表情到相册${failed > 0 ? '，$failed 个失败' : ''}')),
+      );
     } catch (e) {
       if (!mounted) return;
       messenger.showSnackBar(

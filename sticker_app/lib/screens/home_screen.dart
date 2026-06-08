@@ -5,7 +5,6 @@ import '../providers/pack_provider.dart';
 import '../models/sticker_pack.dart';
 import '../services/clipboard_service.dart';
 import 'gallery_picker_screen.dart';
-import 'desktop_gallery_picker_screen.dart';
 import 'pack_detail_screen.dart';
 import 'import_link_screen.dart';
 import 'share_pack_screen.dart';
@@ -99,13 +98,10 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _addFromGallery(BuildContext context) async {
-    final isDesktop = ClipboardService.isDesktop;
     final result = await Navigator.push<List<File>>(
       context,
       MaterialPageRoute(
-        builder: (_) => isDesktop
-            ? const DesktopGalleryPickerScreen()
-            : const GalleryPickerScreen(),
+        builder: (_) => const GalleryPickerScreen(),
       ),
     );
     if (result != null && result.isNotEmpty) {
