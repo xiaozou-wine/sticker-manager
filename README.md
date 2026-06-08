@@ -16,10 +16,6 @@ vps-server/    — VPS 分享服务（端到端加密）
 - **PC 端**：[Releases](https://github.com/xiaozou-wine/sticker-manager/releases/tag/v1.0.0-pc) 下载 `sticker_pc_v1.0.0.zip`，解压运行 `sticker_pc.exe`
 - **Android 端**：暂未发布 APK，可从源码构建
 
-## 使用教程
-
-详见 [docs/](docs/) 目录
-
 ## 从源码构建
 
 ```bash
