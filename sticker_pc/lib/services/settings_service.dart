@@ -82,4 +82,26 @@ class SettingsService {
     await f.create(recursive: true);
     await f.writeAsString(json.encode(data));
   }
+
+  static Future<String> loadApiBaseUrl() async {
+    try {
+      final f = await _file;
+      if (!await f.exists()) return '';
+      final data = json.decode(await f.readAsString());
+      return data['apiBaseUrl'] ?? '';
+    } catch (_) {
+      return '';
+    }
+  }
+
+  static Future<void> saveApiBaseUrl(String url) async {
+    final f = await _file;
+    Map<String, dynamic> data = {};
+    if (await f.exists()) {
+      data = json.decode(await f.readAsString());
+    }
+    data['apiBaseUrl'] = url;
+    await f.create(recursive: true);
+    await f.writeAsString(json.encode(data));
+  }
 }

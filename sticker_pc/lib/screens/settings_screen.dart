@@ -13,6 +13,8 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   HotkeyConfig? _currentConfig;
   bool _isRecording = false;
+  final _serverController = TextEditingController();
+  String _savedServerAddr = '';
 
   // Keys currently held down (for tracking modifier state).
   final Set<PhysicalKeyboardKey> _heldModifiers = {};
@@ -31,12 +33,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   void dispose() {
     HardwareKeyboard.instance.removeHandler(_handleKeyEvent);
+    _serverController.dispose();
     super.dispose();
   }
 
   Future<void> _loadConfig() async {
     final config = await SettingsService.loadHotkeyConfig();
-    if (mounted) setState(() => _currentConfig = config);
+    final serverAddr = await SettingsService.loadApiBaseUrl();
+    if (mounted) {
+      setState(() {
+        _currentConfig = config;
+        _savedServerAddr = serverAddr;
+        _serverController.text = serverAddr;
+      });
+    }
   }
 
   bool _handleKeyEvent(KeyEvent event) {
@@ -212,6 +222,46 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ),
           ],
+
+          const SizedBox(height: 40),
+
+          // ── Server address section ────────────────────────────────
+          const Text(
+            '服务器地址',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            '留空使用默认地址，修改后重启生效',
+            style: TextStyle(color: Colors.grey),
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            controller: _serverController,
+            decoration: const InputDecoration(
+              hintText: 'http://your-server:8080',
+              border: OutlineInputBorder(),
+            ),
+            keyboardType: TextInputType.url,
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: () async {
+                final url = _serverController.text.trim();
+                await SettingsService.saveApiBaseUrl(url);
+                if (mounted) {
+                  setState(() => _savedServerAddr = url);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('已保存，重启后生效')),
+                  );
+                }
+              },
+              icon: const Icon(Icons.save),
+              label: const Text('保存服务器地址'),
+            ),
+          ),
         ],
       ),
     );

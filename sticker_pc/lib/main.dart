@@ -8,6 +8,7 @@ import 'package:tray_manager/tray_manager.dart';
 import 'services/storage_service.dart';
 import 'services/settings_service.dart';
 import 'services/hotkey_service.dart';
+import 'config.dart';
 import 'providers/pack_provider.dart';
 import 'providers/sticker_provider.dart';
 import 'screens/home_screen.dart';
@@ -18,6 +19,7 @@ void main() async {
 
   StorageService.initFfi();
   final storage = StorageService();
+  await AppConfig.init();
 
   await windowManager.ensureInitialized();
   const windowOptions = WindowOptions(

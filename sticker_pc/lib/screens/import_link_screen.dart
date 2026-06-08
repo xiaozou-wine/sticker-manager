@@ -128,10 +128,15 @@ class _ImportLinkScreenState extends State<ImportLinkScreen> {
         if (!mounted) return;
         setState(() { _parsedLink = parsed; _preview = _PackPreview(name: pack.name, count: pack.stickerCount, code: parsed.shareCode); });
       } else {
+        // Handle sticker://share/{code} format (non-encrypted) or plain code
+        String code = input;
+        if (input.startsWith('sticker://share/')) {
+          code = input.substring('sticker://share/'.length);
+        }
         final api = ApiService(baseUrl: AppConfig.apiBaseUrl);
-        final pack = await api.getPackByCode(input);
+        final pack = await api.getPackByCode(code);
         if (!mounted) return;
-        setState(() { _preview = _PackPreview(name: pack.name, count: pack.stickerCount, code: input); });
+        setState(() { _preview = _PackPreview(name: pack.name, count: pack.stickerCount, code: code); });
       }
     } catch (e) {
       if (mounted) setState(() { _error = '查找失败: 请检查链接或分享码是否正确'; });
