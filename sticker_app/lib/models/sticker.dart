@@ -50,11 +50,19 @@ class Sticker {
   }
 
   factory Sticker.fromApiMap(Map<String, dynamic> map) {
-    final fileUrl = map['file_url'] as String? ?? '';
-    final ext = fileUrl.contains('.') ? '.${fileUrl.split('.').last}' : '.png';
+    final apiExt = map['extension'] as String?;
+    String ext;
+    if (apiExt != null && apiExt.isNotEmpty) {
+      ext = apiExt.startsWith('.') ? apiExt : '.$apiExt';
+    } else {
+      final fileUrl = map['file_url'] as String? ?? '';
+      final dotIdx = fileUrl.lastIndexOf('.');
+      ext = (dotIdx >= 0) ? fileUrl.substring(dotIdx) : '.png';
+      if (!ext.startsWith('.') || ext.length > 5) ext = '.png';
+    }
     return Sticker(
       id: map['id'],
-      packId: '',
+      packId: map['pack_id'] ?? '',
       type: map['type'] ?? 'image',
       width: map['width'] ?? 0,
       height: map['height'] ?? 0,

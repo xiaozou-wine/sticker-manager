@@ -8,6 +8,8 @@ import '../providers/pack_provider.dart';
 import '../models/sticker_pack.dart';
 import '../models/sticker.dart';
 import '../widgets/sticker_grid.dart';
+import '../services/storage_service.dart';
+import '../services/gallery_save_service.dart';
 import 'gallery_picker_screen.dart';
 
 class PackDetailScreen extends StatefulWidget {
@@ -22,6 +24,9 @@ class PackDetailScreen extends StatefulWidget {
 
 class _PackDetailScreenState extends State<PackDetailScreen> {
   bool _isImporting = false;
+  bool _isSaving = false;
+  int _saveCurrent = 0;
+  int _saveTotal = 0;
 
   @override
   void initState() {
@@ -71,7 +76,7 @@ class _PackDetailScreenState extends State<PackDetailScreen> {
       );
     } catch (e) {
       messenger.showSnackBar(
-        SnackBar(content: Text('导入失败: $e')),
+        const SnackBar(content: Text('导入失败，请检查文件')),
       );
     } finally {
       if (mounted) setState(() => _isImporting = false);
@@ -84,12 +89,37 @@ class _PackDetailScreenState extends State<PackDetailScreen> {
       appBar: AppBar(
         title: Text(widget.pack.name),
         actions: [
+          if (_isSaving)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
+                  const SizedBox(width: 6),
+                  Text('$_saveCurrent/$_saveTotal', style: const TextStyle(fontSize: 13)),
+                  const SizedBox(width: 8),
+                ],
+              ),
+            )
+          else if (!_isImporting) ...[
+            IconButton(
+              icon: const Icon(Icons.edit),
+              onPressed: _renamePack,
+              tooltip: '重命名',
+            ),
+            IconButton(
+              icon: const Icon(Icons.save_alt),
+              onPressed: _confirmSaveToGallery,
+              tooltip: '保存到相册',
+            ),
+          ],
           if (_isImporting)
             const Padding(
               padding: EdgeInsets.all(16),
               child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
             )
-          else
+          else if (!_isSaving)
             IconButton(
               icon: const Icon(Icons.add_photo_alternate),
               onPressed: _addMore,
@@ -124,6 +154,40 @@ class _PackDetailScreenState extends State<PackDetailScreen> {
     }
   }
 
+  void _renamePack() {
+    final controller = TextEditingController(text: widget.pack.name);
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('重命名'),
+        content: TextField(
+          controller: controller,
+          decoration: const InputDecoration(hintText: '输入新名称', border: OutlineInputBorder()),
+          autofocus: true,
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('取消')),
+          ElevatedButton(
+            onPressed: () async {
+              final newName = controller.text.trim();
+              if (newName.isEmpty || newName == widget.pack.name) {
+                Navigator.pop(ctx);
+                return;
+              }
+              Navigator.pop(ctx);
+              widget.pack.name = newName;
+              final storage = context.read<StorageService>();
+              await storage.updatePack(widget.pack);
+              context.read<PackProvider>().loadPacks();
+              if (mounted) setState(() {});
+            },
+            child: const Text('确定'),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _showDeleteStickerDialog(Sticker sticker) {
     showDialog(
       context: context,
@@ -149,5 +213,84 @@ class _PackDetailScreenState extends State<PackDetailScreen> {
         ],
       ),
     );
+  }
+
+  Future<void> _confirmSaveToGallery() async {
+    final provider = context.read<StickerProvider>();
+    final count = provider.stickers.length;
+    if (count == 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('当前没有表情可以保存')),
+      );
+      return;
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('保存到相册'),
+        content: Text('将 $count 个表情保存到手机相册？'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('确定'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && mounted) {
+      _saveToGallery(count);
+    }
+  }
+
+  Future<void> _saveToGallery(int total) async {
+    setState(() {
+      _isSaving = true;
+      _saveCurrent = 0;
+      _saveTotal = total;
+    });
+
+    final storage = StorageService();
+    final messenger = ScaffoldMessenger.of(context);
+
+    try {
+      final result = await GallerySaveService.savePackToGallery(
+        storage,
+        widget.pack.id,
+        onProgress: (current, total) {
+          if (mounted) {
+            setState(() {
+              _saveCurrent = current;
+              _saveTotal = total;
+            });
+          }
+        },
+      );
+
+      if (!mounted) return;
+      final saved = result['saved'] ?? 0;
+      final failed = result['failed'] ?? 0;
+      if (failed == 0) {
+        messenger.showSnackBar(
+          SnackBar(content: Text('已保存 $saved 个表情到相册')),
+        );
+      } else {
+        messenger.showSnackBar(
+          SnackBar(content: Text('保存完成：成功 $saved 个，失败 $failed 个')),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      messenger.showSnackBar(
+        const SnackBar(content: Text('保存失败，请检查存储权限')),
+      );
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
   }
 }

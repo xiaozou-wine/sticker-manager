@@ -48,4 +48,23 @@ class AccessibilityService {
     if (result == null) return [];
     return result.map((e) => Map<String, dynamic>.from(e as Map)).toList();
   }
+
+  /// Request to be exempt from battery optimization.
+  static Future<void> requestIgnoreBatteryOptimizations() async {
+    await _channel.invokeMethod('requestIgnoreBatteryOptimizations');
+  }
+
+  /// Open auto-start settings for Chinese ROMs.
+  static Future<void> openAutoStartSettings() async {
+    await _channel.invokeMethod('openAutoStartSettings');
+  }
+
+  /// Save a file to the phone's public gallery (Pictures/{folderName}).
+  static Future<String?> saveToGallery(String filePath, {String folderName = 'StickerApp'}) async {
+    final result = await _channel.invokeMethod<String>('saveToGallery', {
+      'filePath': filePath,
+      'folderName': folderName,
+    });
+    return result;
+  }
 }

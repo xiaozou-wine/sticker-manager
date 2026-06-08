@@ -19,7 +19,7 @@ func New(dbPath string) (*DB, error) {
 		return nil, fmt.Errorf("create db dir: %w", err)
 	}
 
-	conn, err := sql.Open("sqlite3", dbPath+"?_journal_mode=WAL")
+	conn, err := sql.Open("sqlite", dbPath+"?_journal_mode=WAL")
 	if err != nil {
 		return nil, fmt.Errorf("open db: %w", err)
 	}

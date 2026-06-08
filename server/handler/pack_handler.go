@@ -103,11 +103,13 @@ func (h *PackHandler) CreatePack(c *gin.Context) {
 		}
 
 		uploaded = append(uploaded, map[string]interface{}{
-			"id":       stickerID,
-			"type":     fileType,
-			"width":    width,
-			"height":   height,
-			"file_url": "/api/stickers/" + stickerID + "/file",
+			"id":        stickerID,
+			"type":      fileType,
+			"width":     width,
+			"height":    height,
+			"size_bytes": file.Size,
+			"extension": ext,
+			"file_url":  "/api/stickers/" + stickerID + "/file",
 		})
 	}
 
@@ -166,6 +168,7 @@ func (h *PackHandler) GetPackStickers(c *gin.Context) {
 		Width     int    `json:"width"`
 		Height    int    `json:"height"`
 		SizeBytes int64  `json:"size_bytes"`
+		Extension string `json:"extension"`
 	}
 
 	var resp []stickerResp
@@ -177,6 +180,7 @@ func (h *PackHandler) GetPackStickers(c *gin.Context) {
 			Width:     s.Width,
 			Height:    s.Height,
 			SizeBytes: s.SizeBytes,
+			Extension: s.Extension,
 		})
 	}
 

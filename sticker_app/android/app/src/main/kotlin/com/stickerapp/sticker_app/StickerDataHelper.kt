@@ -49,8 +49,8 @@ class StickerDataHelper(private val context: Context) {
         }
 
         val stickers = mutableListOf<StickerItem>()
+        val db = SQLiteDatabase.openDatabase(dbPath, null, SQLiteDatabase.OPEN_READONLY)
         try {
-            val db = SQLiteDatabase.openDatabase(dbPath, null, SQLiteDatabase.OPEN_READONLY)
             db.rawQuery(
                 "SELECT id, pack_id, local_path, type FROM stickers ORDER BY created_at DESC",
                 null
@@ -61,15 +61,15 @@ class StickerDataHelper(private val context: Context) {
                     val localPath = cursor.getString(2) ?: continue
                     val type = cursor.getString(3) ?: "image"
 
-                    // Verify the file exists
                     if (File(localPath).exists()) {
                         stickers.add(StickerItem(id, packId, localPath, type))
                     }
                 }
             }
-            db.close()
         } catch (e: Exception) {
             Log.e(TAG, "Failed to read stickers from database", e)
+        } finally {
+            db.close()
         }
 
         return stickers
@@ -80,8 +80,8 @@ class StickerDataHelper(private val context: Context) {
         if (!File(dbPath).exists()) return emptyList()
 
         val stickers = mutableListOf<StickerItem>()
+        val db = SQLiteDatabase.openDatabase(dbPath, null, SQLiteDatabase.OPEN_READONLY)
         try {
-            val db = SQLiteDatabase.openDatabase(dbPath, null, SQLiteDatabase.OPEN_READONLY)
             db.rawQuery(
                 "SELECT id, pack_id, local_path, type FROM stickers WHERE pack_id = ? ORDER BY created_at",
                 arrayOf(packId)
@@ -96,9 +96,10 @@ class StickerDataHelper(private val context: Context) {
                     }
                 }
             }
-            db.close()
         } catch (e: Exception) {
             Log.e(TAG, "Failed to read stickers for pack $packId", e)
+        } finally {
+            db.close()
         }
 
         return stickers
@@ -109,8 +110,8 @@ class StickerDataHelper(private val context: Context) {
         if (!File(dbPath).exists()) return emptyList()
 
         val packs = mutableListOf<StickerPackInfo>()
+        val db = SQLiteDatabase.openDatabase(dbPath, null, SQLiteDatabase.OPEN_READONLY)
         try {
-            val db = SQLiteDatabase.openDatabase(dbPath, null, SQLiteDatabase.OPEN_READONLY)
             db.rawQuery(
                 "SELECT id, name, sticker_count FROM sticker_packs ORDER BY updated_at DESC",
                 null
@@ -122,11 +123,63 @@ class StickerDataHelper(private val context: Context) {
                     packs.add(StickerPackInfo(id, name, count))
                 }
             }
-            db.close()
         } catch (e: Exception) {
             Log.e(TAG, "Failed to read sticker packs", e)
+        } finally {
+            db.close()
         }
 
         return packs
+    }
+
+    /**
+     * Get all stickers grouped by pack in a single DB connection.
+     * Returns list of (StickerPackInfo, List<StickerItem>) pairs.
+     */
+    fun getAllStickersGrouped(): List<Pair<StickerPackInfo, List<StickerItem>>> {
+        val dbPath = getDatabasePath()
+        if (!File(dbPath).exists()) return emptyList()
+
+        val result = mutableListOf<Pair<StickerPackInfo, List<StickerItem>>>()
+        val db = SQLiteDatabase.openDatabase(dbPath, null, SQLiteDatabase.OPEN_READONLY)
+        try {
+            // Load packs
+            val packs = mutableListOf<StickerPackInfo>()
+            db.rawQuery(
+                "SELECT id, name, sticker_count FROM sticker_packs ORDER BY updated_at DESC",
+                null
+            ).use { cursor ->
+                while (cursor.moveToNext()) {
+                    packs.add(StickerPackInfo(cursor.getString(0), cursor.getString(1) ?: "", cursor.getInt(2)))
+                }
+            }
+
+            // Load all stickers in one query
+            val stickersByPack = mutableMapOf<String, MutableList<StickerItem>>()
+            db.rawQuery(
+                "SELECT id, pack_id, local_path, type FROM stickers ORDER BY pack_id, created_at",
+                null
+            ).use { cursor ->
+                while (cursor.moveToNext()) {
+                    val localPath = cursor.getString(2) ?: continue
+                    if (!File(localPath).exists()) continue
+                    val item = StickerItem(cursor.getString(0), cursor.getString(1), localPath, cursor.getString(3) ?: "image")
+                    stickersByPack.getOrPut(item.packId) { mutableListOf() }.add(item)
+                }
+            }
+
+            for (pack in packs) {
+                val stickers = stickersByPack[pack.id] ?: continue
+                if (stickers.isNotEmpty()) {
+                    result.add(Pair(pack, stickers))
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to read grouped stickers", e)
+        } finally {
+            db.close()
+        }
+
+        return result
     }
 }

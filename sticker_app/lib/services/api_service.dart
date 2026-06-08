@@ -6,6 +6,19 @@ import '../models/sticker.dart';
 class ApiService {
   final Dio _dio;
   final String baseUrl;
+  static final Dio _downloadDio = Dio(BaseOptions(
+    connectTimeout: const Duration(seconds: 10),
+    receiveTimeout: const Duration(seconds: 60),
+  ));
+  static final Map<String, Dio> _serverDioCache = {};
+
+  static Dio _getServerDio(String serverAddr) {
+    return _serverDioCache.putIfAbsent(serverAddr, () => Dio(BaseOptions(
+      baseUrl: serverAddr,
+      connectTimeout: const Duration(seconds: 10),
+      receiveTimeout: const Duration(seconds: 30),
+    )));
+  }
 
   ApiService({required this.baseUrl})
       : _dio = Dio(BaseOptions(
@@ -14,14 +27,24 @@ class ApiService {
           receiveTimeout: const Duration(seconds: 30),
         ));
 
-  /// Upload a sticker pack with images
-  /// Returns the created pack and list of uploaded stickers
+  /// Upload a sticker pack with images (supports custom VPS server)
   Future<UploadResult> uploadPack({
     required String name,
     required String description,
     required List<File> images,
     Function(int, int)? onSendProgress,
+    String? customBaseUrl,
+    String? authToken,
   }) async {
+    final dio = customBaseUrl != null
+        ? Dio(BaseOptions(
+            baseUrl: customBaseUrl,
+            connectTimeout: const Duration(seconds: 10),
+            receiveTimeout: const Duration(seconds: 120),
+            headers: authToken != null ? {'X-Auth-Token': authToken} : null,
+          ))
+        : _dio;
+
     final formData = FormData.fromMap({
       'name': name,
       'description': description,
@@ -33,7 +56,7 @@ class ApiService {
       ),
     });
 
-    final response = await _dio.post(
+    final response = await dio.post(
       '/api/packs',
       data: formData,
       onSendProgress: onSendProgress,
@@ -59,21 +82,74 @@ class ApiService {
     final response = await _dio.get('/api/packs/$code/stickers');
     final stickers = response.data['stickers'] as List;
     return stickers
-        .map((s) => StickerWithUrl(
-              id: s['id'],
-              type: s['type'],
-              fileUrl: '$baseUrl${s['file_url']}',
-              width: s['width'] ?? 0,
-              height: s['height'] ?? 0,
-              sizeBytes: s['size_bytes'] ?? 0,
-            ))
+        .map((s) {
+          final apiExt = s['extension'] as String?;
+          final ext = (apiExt != null && apiExt.isNotEmpty)
+              ? (apiExt.startsWith('.') ? apiExt : '.$apiExt')
+              : '.png';
+          return StickerWithUrl(
+            id: s['id'],
+            type: s['type'],
+            fileUrl: '$baseUrl${s['file_url']}',
+            width: s['width'] ?? 0,
+            height: s['height'] ?? 0,
+            sizeBytes: s['size_bytes'] ?? 0,
+            extension: ext,
+          );
+        })
         .toList();
   }
 
   /// Download a sticker file to local path
+  /// fileUrl should be a full URL (from serverAddr + file_url)
   Future<File> downloadSticker(String fileUrl, String savePath) async {
-    await _dio.download(fileUrl, savePath);
+    await _downloadDio.download(fileUrl, savePath);
     return File(savePath);
+  }
+
+  /// Get pack info from a custom server
+  Future<StickerPack> getPackByCodeFromServer(String code, String serverAddr) async {
+    _validateServerAddr(serverAddr);
+    final dio = _getServerDio(serverAddr);
+    final response = await dio.get('/api/packs/$code');
+    return StickerPack.fromApiMap(response.data['pack']);
+  }
+
+  /// Get stickers from a custom server
+  Future<List<StickerWithUrl>> getPackStickersFromServer(String code, String serverAddr) async {
+    _validateServerAddr(serverAddr);
+    final dio = _getServerDio(serverAddr);
+    final response = await dio.get('/api/packs/$code/stickers');
+    final stickers = response.data['stickers'] as List;
+    return stickers
+        .map((s) {
+          final apiExt = s['extension'] as String?;
+          final ext = (apiExt != null && apiExt.isNotEmpty)
+              ? (apiExt.startsWith('.') ? apiExt : '.$apiExt')
+              : '.png';
+          return StickerWithUrl(
+            id: s['id'],
+            type: s['type'] ?? 'image',
+            fileUrl: s['file_url'].toString().startsWith('http')
+                ? s['file_url']
+                : '$serverAddr${s['file_url']}',
+            width: s['width'] ?? 0,
+            height: s['height'] ?? 0,
+            sizeBytes: s['size_bytes'] ?? 0,
+            extension: ext,
+          );
+        })
+        .toList();
+  }
+
+  static void _validateServerAddr(String addr) {
+    final uri = Uri.tryParse(addr);
+    if (uri == null || !uri.hasScheme || !uri.hasAuthority) {
+      throw ArgumentError('无效的服务器地址: $addr');
+    }
+    if (uri.scheme != 'http' && uri.scheme != 'https') {
+      throw ArgumentError('服务器地址必须使用 http 或 https');
+    }
   }
 }
 
@@ -91,6 +167,7 @@ class StickerWithUrl {
   final int width;
   final int height;
   final int sizeBytes;
+  final String extension;
 
   StickerWithUrl({
     required this.id,
@@ -99,5 +176,6 @@ class StickerWithUrl {
     this.width = 0,
     this.height = 0,
     this.sizeBytes = 0,
+    this.extension = '.png',
   });
 }

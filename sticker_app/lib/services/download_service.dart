@@ -4,6 +4,7 @@ import 'package:path/path.dart' as p;
 import 'api_service.dart';
 import 'storage_service.dart';
 import '../models/sticker.dart';
+import 'accessibility_service.dart';
 
 class DownloadService {
   final ApiService apiService;
@@ -42,9 +43,14 @@ class DownloadService {
     for (int i = 0; i < remoteStickers.length; i++) {
       final remote = remoteStickers[i];
       try {
-        final ext = _getExtension(remote.fileUrl);
+        final ext = remote.extension.isNotEmpty ? remote.extension : '.png';
         final localPath = p.join(packDir.path, '${remote.id}$ext');
         await apiService.downloadSticker(remote.fileUrl, localPath);
+
+        // Save to phone gallery (Android only)
+        if (Platform.isAndroid) {
+          await AccessibilityService.saveToGallery(localPath, folderName: 'StickerApp/$packName');
+        }
 
         final sticker = Sticker(
           id: remote.id,
@@ -82,13 +88,6 @@ class DownloadService {
     );
   }
 
-  String _getExtension(String url) {
-    final uri = Uri.parse(url);
-    final path = uri.path;
-    final ext = p.extension(path);
-    if (ext.isNotEmpty) return ext;
-    return '.png';
-  }
 }
 
 class DownloadResult {

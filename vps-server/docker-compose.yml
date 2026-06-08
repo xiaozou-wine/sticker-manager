@@ -1,0 +1,12 @@
+services:
+  sticker-vps:
+    build: .
+    ports:
+      - "${PORT:-8080}:8080"
+    environment:
+      - PASSWORD=${PASSWORD}
+      - PORT=8080
+      - DATA_DIR=/data
+    volumes:
+      - ./data:/data
+    restart: unless-stopped

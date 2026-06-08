@@ -29,7 +29,7 @@ class _UISnapshotScreenState extends State<UISnapshotScreen> {
       });
     } catch (e) {
       setState(() {
-        _error = '抓取失败: $e\n请确保无障碍服务已开启，且已切换到 QQ/微信界面';
+        _error = '抓取失败，请确保无障碍服务已开启，且已切换到 QQ/微信界面';
         _loading = false;
       });
     }

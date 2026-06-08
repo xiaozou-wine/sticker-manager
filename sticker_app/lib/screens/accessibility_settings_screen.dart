@@ -123,20 +123,29 @@ class _AccessibilitySettingsScreenState extends State<AccessibilitySettingsScree
         const SizedBox(height: 12),
         _buildStep(
           number: 1,
-          title: '授予悬浮窗权限',
-          subtitle: '允许 App 在其他应用上显示悬浮窗',
-          done: _overlayPermission,
-          onTap: () async {
-            await AccessibilityService.openOverlayPermissionSettings();
-          },
-        ),
-        _buildStep(
-          number: 2,
           title: '开启无障碍服务',
           subtitle: '允许 App 监听 QQ/微信的界面状态',
           done: _serviceEnabled,
           onTap: () async {
             await AccessibilityService.openAccessibilitySettings();
+          },
+        ),
+        _buildStep(
+          number: 2,
+          title: '忽略电池优化',
+          subtitle: '防止系统杀后台，保持服务长期运行',
+          done: false,
+          onTap: () async {
+            await AccessibilityService.requestIgnoreBatteryOptimizations();
+          },
+        ),
+        _buildStep(
+          number: 3,
+          title: '允许自启动',
+          subtitle: '开机后自动启动（小米/华为/OPPO/Vivo）',
+          done: false,
+          onTap: () async {
+            await AccessibilityService.openAutoStartSettings();
           },
         ),
       ],
@@ -184,6 +193,41 @@ class _AccessibilitySettingsScreenState extends State<AccessibilitySettingsScree
     );
   }
 
+  Widget _buildKeepAliveSection() {
+    return Card(
+      color: Colors.purple[50],
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('防止服务被杀', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.purple[700])),
+            const SizedBox(height: 12),
+            const Text('国产手机系统会自动清理后台服务，以下设置可以防止无障碍服务被杀：'),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                icon: const Icon(Icons.battery_saver),
+                label: const Text('关闭电池优化'),
+                onPressed: () => AccessibilityService.requestIgnoreBatteryOptimizations(),
+              ),
+            ),
+            const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                icon: const Icon(Icons.start),
+                label: const Text('开启自启动'),
+                onPressed: () => AccessibilityService.openAutoStartSettings(),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildHowItWorks() {
     return Card(
       child: Padding(
@@ -193,10 +237,11 @@ class _AccessibilitySettingsScreenState extends State<AccessibilitySettingsScree
           children: [
             const Text('使用方式', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
             const SizedBox(height: 12),
-            _buildStepRow(Icons.chat, '打开 QQ/微信聊天窗口'),
-            _buildStepRow(Icons.emoji_emotions, '点击表情按钮，悬浮窗自动弹出'),
-            _buildStepRow(Icons.touch_app, '在悬浮窗中选择表情'),
-            _buildStepRow(Icons.send, '表情自动粘贴到输入框并发送'),
+            _buildStepRow(Icons.download, '在 App 中下载表情包集'),
+            _buildStepRow(Icons.photo_library, '表情自动保存到手机相册'),
+            _buildStepRow(Icons.chat, '在 QQ/微信聊天中点 "+" → 相册'),
+            _buildStepRow(Icons.folder, '找到 StickerApp 文件夹'),
+            _buildStepRow(Icons.send, '选择表情直接发送（GIF 保留动画）'),
           ],
         ),
       ),

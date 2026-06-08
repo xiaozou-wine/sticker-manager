@@ -30,16 +30,6 @@ class _HomeScreenState extends State<HomeScreen> {
       appBar: AppBar(
         title: const Text('表情包管理'),
         centerTitle: true,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.accessibility_new),
-            tooltip: '聊天表情集成',
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const AccessibilitySettingsScreen()),
-            ),
-          ),
-        ],
       ),
       body: Consumer<PackProvider>(
         builder: (context, provider, _) {

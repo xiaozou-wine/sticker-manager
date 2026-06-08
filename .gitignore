@@ -8,3 +8,8 @@ sticker_app/.dart_tool/
 
 server/sticker-server-*
 TASK.md
+server/sticker-server
+sticker_app/android/build/
+vps-server/data/
+vps-server/sticker-vps
+vps-server/.env

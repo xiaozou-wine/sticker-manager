@@ -1,7 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:wechat_assets_picker/wechat_assets_picker.dart';
-import 'package:permission_handler/permission_handler.dart';
 
 class GalleryPickerScreen extends StatefulWidget {
   final String? targetPackId;
@@ -127,28 +126,13 @@ class _GalleryPickerScreenState extends State<GalleryPickerScreen> {
   }
 
   Future<void> _pickAssets() async {
-    // BUG-1: Check permission before opening picker
-    final status = await Permission.photos.request();
-    if (!status.isGranted && !status.isLimited) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('需要相册权限才能选择图片'),
-            action: SnackBarAction(label: '去设置', onPressed: () => openAppSettings()),
-          ),
-        );
-      }
-      return;
-    }
-
     try {
       final List<AssetEntity>? assets = await AssetPicker.pickAssets(
         context,
         pickerConfig: AssetPickerConfig(
           maxAssets: 50,
-          requestType: RequestType.image,
+          requestType: RequestType.common,
           selectedAssets: _selectedAssets,
-          filterOptions: FilterOptionGroup(),
         ),
       );
 
@@ -159,16 +143,8 @@ class _GalleryPickerScreenState extends State<GalleryPickerScreen> {
       }
     } catch (e) {
       if (mounted) {
-        final msg = e.toString().contains('PermissionState.denied')
-            ? '相册权限被拒绝，请在设置中开启'
-            : '选择图片失败，请重试';
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(msg),
-            action: e.toString().contains('PermissionState.denied')
-                ? SnackBarAction(label: '去设置', onPressed: () => openAppSettings())
-                : null,
-          ),
+          SnackBar(content: Text('选择图片失败: $e')),
         );
       }
     }
@@ -194,7 +170,7 @@ class _GalleryPickerScreenState extends State<GalleryPickerScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('处理图片失败: $e')),
+          const SnackBar(content: Text('处理图片失败，请重试')),
         );
       }
     } finally {
