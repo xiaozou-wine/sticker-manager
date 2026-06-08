@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="accessibility_service_description">表情包助手：监听QQ/微信聊天界面，在表情面板打开时显示悬浮窗，快速选择并发送表情包。</string>
+</resources>

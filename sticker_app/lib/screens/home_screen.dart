@@ -7,6 +7,7 @@ import 'gallery_picker_screen.dart';
 import 'pack_detail_screen.dart';
 import 'import_link_screen.dart';
 import 'share_pack_screen.dart';
+import 'accessibility_settings_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -26,7 +27,20 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('表情包管理'), centerTitle: true),
+      appBar: AppBar(
+        title: const Text('表情包管理'),
+        centerTitle: true,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.accessibility_new),
+            tooltip: '聊天表情集成',
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const AccessibilitySettingsScreen()),
+            ),
+          ),
+        ],
+      ),
       body: Consumer<PackProvider>(
         builder: (context, provider, _) {
           if (provider.isLoading) return const Center(child: CircularProgressIndicator());
