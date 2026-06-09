@@ -151,10 +151,15 @@ curl http://localhost:28749/health
 
 **方式 A：Cloudflare 代理（最简单）**
 
-1. Cloudflare 添加 A 记录：`sticker` → 你的 VPS IP
-2. 开启橙色云朵（代理模式）
-3. SSL/TLS 模式选 **Flexible**
-4. 访问 `https://sticker.你的域名/health` 验证
+1. 修改 systemd 服务端口为 80（Cloudflare 只代理 80/443）：
+   ```bash
+   sed -i 's/PORT=28749/PORT=80/' /etc/systemd/system/sticker-vps.service
+   systemctl daemon-reload && systemctl restart sticker-vps
+   ```
+2. Cloudflare 添加 A 记录：`sticker` → 你的 VPS IP
+3. 开启橙色云朵（代理模式）
+4. SSL/TLS 模式选 **Flexible**
+5. 访问 `https://sticker.你的域名/health` 验证
 
 **方式 B：Nginx + Let's Encrypt（自签证书）**
 
