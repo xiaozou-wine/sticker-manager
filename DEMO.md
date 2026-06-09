@@ -3,7 +3,7 @@
 用 Sticker Manager Android 客户端导入以下链接，即可体验端到端加密分享：
 
 ```
-sticker://share/aHR0cHM6Ly9zdGlja2VyLjA3MDIxMC54eXp8Y2U3YjMwYTNiMjE0ODU5ZGQyMGExODYxZDVhMjg5YjN8YjNkZTIxYmI5NjJhNGYx#5ZBEImX7mc-JM4LSx-1tkasUhGj62z89jz01umNIkF4
+sticker://share/aHR0cHM6Ly9zdGlja2VyLjA3MDIxMC54eXp8Y2U3YjMwYTNiMjE0ODU5ZGQyMGExODYxZDVhMjg5YjN8YjNkZWIyMWJiOTYyYTRmMQ#5ZBEImX7mc-JM4LSx-1tkasUhGj62z89jz01umNIkF4
 ```
 
 **使用方式：**
