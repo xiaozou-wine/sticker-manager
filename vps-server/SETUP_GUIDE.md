@@ -151,10 +151,15 @@ curl http://localhost:28749/health
 
 **方式 A：Cloudflare 代理（最简单）**
 
-1. 修改 systemd 服务端口为 80（Cloudflare 只代理 80/443）：
+1. 修改对外端口为 80（Cloudflare 只代理 80/443）：
    ```bash
+   # 直接部署：修改 systemd 服务
    sed -i 's/PORT=28749/PORT=80/' /etc/systemd/system/sticker-vps.service
    systemctl daemon-reload && systemctl restart sticker-vps
+
+   # Docker 部署：修改 .env 文件
+   echo "PORT=80" >> .env
+   docker compose up -d
    ```
 2. Cloudflare 添加 A 记录：`sticker` → 你的 VPS IP
 3. 开启橙色云朵（代理模式）
