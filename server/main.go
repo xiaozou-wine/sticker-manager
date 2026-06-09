@@ -13,10 +13,10 @@ import (
 )
 
 func main() {
-	port := flag.Int("port", 8080, "server port")
+	port := flag.Int("port", 28749, "server port")
 	dbPath := flag.String("db", "./data/stickers.db", "SQLite database path")
 	staticDir := flag.String("static", "./static", "static files directory")
-	baseURL := flag.String("base-url", "", "base URL for file links (e.g. http://localhost:8080)")
+	baseURL := flag.String("base-url", "", "base URL for file links (e.g. http://your-server:28749)")
 	corsOrigin := flag.String("cors-origin", "*", "allowed CORS origin (use specific domain in production)")
 	flag.Parse()
 

@@ -239,7 +239,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           TextField(
             controller: _serverController,
             decoration: const InputDecoration(
-              hintText: 'http://your-server:8080',
+              hintText: 'http://your-server:28749',
               border: OutlineInputBorder(),
             ),
             keyboardType: TextInputType.url,

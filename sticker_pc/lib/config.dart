@@ -3,7 +3,7 @@ import 'services/settings_service.dart';
 class AppConfig {
   static const _compileTimeDefault = String.fromEnvironment(
     'API_BASE_URL',
-    defaultValue: 'http://localhost:8080',
+    defaultValue: 'http://localhost:28749',
   );
 
   static String _resolvedBaseUrl = _compileTimeDefault;

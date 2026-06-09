@@ -20,7 +20,7 @@ func main() {
 	if password == "" {
 		log.Fatal("PASSWORD environment variable is required")
 	}
-	port := envOr("PORT", "8080")
+	port := envOr("PORT", "28749")
 	dataDir := envOr("DATA_DIR", "./data")
 	staticDir := filepath.Join(dataDir, "stickers")
 	os.MkdirAll(staticDir, 0755)
@@ -104,11 +104,6 @@ func createPack(db *DB, staticDir string) gin.HandlerFunc {
 		if len(files) == 0 {
 			db.DeletePack(pack.ID)
 			c.JSON(400, gin.H{"error": "no stickers"})
-			return
-		}
-		if len(files) > 100 {
-			db.DeletePack(pack.ID)
-			c.JSON(400, gin.H{"error": "max 200 stickers"})
 			return
 		}
 

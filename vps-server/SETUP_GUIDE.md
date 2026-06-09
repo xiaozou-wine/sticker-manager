@@ -29,7 +29,7 @@
 
 **设置服务器地址**
 1. 点击右上角齿轮 → 设置
-2. 输入服务器地址（如 `http://你的IP:8080`）→ 保存
+2. 输入服务器地址（如 `http://你的IP:28749`）→ 保存
 3. 重启应用生效
 
 ---
@@ -91,7 +91,7 @@ After=network.target
 [Service]
 Type=simple
 EnvironmentFile=/data/sticker-vps/.env
-Environment=PORT=8080
+Environment=PORT=28749
 Environment=DATA_DIR=/data/sticker-vps
 ExecStart=/usr/local/bin/sticker-vps
 Restart=on-failure
@@ -106,22 +106,22 @@ systemctl enable --now sticker-vps
 
 **5. 验证服务运行**
 ```bash
-curl http://localhost:8080/health
+curl http://localhost:28749/health
 # 应该输出: {"status":"ok"}
 ```
 
 **6. 开放防火墙端口**
 ```bash
 # Ubuntu/Debian (ufw)
-ufw allow 8080/tcp
+ufw allow 28749/tcp
 ufw reload
 
 # CentOS/RHEL (firewalld)
-firewall-cmd --permanent --add-port=8080/tcp
+firewall-cmd --permanent --add-port=28749/tcp
 firewall-cmd --reload
 ```
 
-外网验证：`curl http://你的VPS-IP:8080/health`
+外网验证：`curl http://你的VPS-IP:28749/health`
 
 ### 方式二：Docker 部署
 
@@ -142,7 +142,7 @@ cat .env
 docker compose up -d
 
 # 验证
-curl http://localhost:8080/health
+curl http://localhost:28749/health
 ```
 
 ### 绑定域名（可选但推荐）
@@ -169,7 +169,7 @@ server {
     client_max_body_size 50M;
 
     location / {
-        proxy_pass http://127.0.0.1:8080;
+        proxy_pass http://127.0.0.1:28749;
         proxy_set_header Host $host;
         proxy_set_header X-Forwarded-Proto $scheme;
         proxy_set_header X-Real-IP $remote_addr;
@@ -195,7 +195,7 @@ curl https://sticker.你的域名.com/health
 1. 打开 App → 进入要分享的表情包集
 2. 点击「分享」→ 选择 **VPS 加密分享**
 3. 填写：
-   - **VPS 地址**：`https://sticker.你的域名.com`（或 `http://VPS-IP:8080`）
+   - **VPS 地址**：`https://sticker.你的域名.com`（或 `http://VPS-IP:28749`）
    - **密码**：部署时生成的密码
 4. 点击「加密上传到 VPS」
 5. 上传完成后复制生成的分享链接，发给朋友
@@ -225,7 +225,7 @@ curl https://sticker.你的域名.com/health
 
 **Q: 分享链接会暴露 IP 吗？**
 - 用域名分享不会暴露 IP
-- 直接用 `http://IP:8080` 分享会暴露
+- 直接用 `http://IP:28749` 分享会暴露
 
 **Q: VPS 管理员能看到我的表情包吗？**
 - 不能。表情包在本地加密后才上传，密钥在链接的 `#` 后面，不会发送到服务器

@@ -2,10 +2,10 @@ services:
   sticker-vps:
     build: .
     ports:
-      - "${PORT:-8080}:8080"
+      - "${PORT:-28749}:28749"
     environment:
       - PASSWORD=${PASSWORD}
-      - PORT=8080
+      - PORT=28749
       - DATA_DIR=/data
     volumes:
       - ./data:/data

@@ -28,7 +28,7 @@ vps-server/    — VPS 分享服务（端到端加密）
 
 ```bash
 # Go 后端
-cd server && go run . --port 8080
+cd server && go run . --port 28749
 
 # Android
 cd sticker_app && flutter run

@@ -156,7 +156,7 @@ class _SharePackScreenState extends State<SharePackScreen> {
           controller: _serverController,
           decoration: const InputDecoration(
             labelText: 'VPS 地址',
-            hintText: 'http://your-vps:8080',
+            hintText: 'http://your-vps:28749',
             border: OutlineInputBorder(),
           ),
           keyboardType: TextInputType.url,

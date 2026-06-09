@@ -24,7 +24,7 @@ After=network.target
 [Service]
 Type=simple
 EnvironmentFile=/data/sticker-vps/.env
-Environment=PORT=8080
+Environment=PORT=28749
 Environment=DATA_DIR=/data/sticker-vps
 ExecStart=/usr/local/bin/sticker-vps
 Restart=on-failure
@@ -39,7 +39,7 @@ systemctl daemon-reload
 systemctl enable --now sticker-vps
 
 # 5. 验证
-curl http://localhost:8080/health
+curl http://localhost:28749/health
 ```
 
 ## 配置
@@ -47,7 +47,7 @@ curl http://localhost:8080/health
 | 环境变量 | 默认值 | 说明 |
 |---|---|---|
 | `PASSWORD` | (必填) | 上传/删除密码 |
-| `PORT` | `8080` | 监听端口 |
+| `PORT` | `28749` | 监听端口 |
 | `DATA_DIR` | `./data` | 数据目录（SQLite + 表情文件） |
 
 ## API
