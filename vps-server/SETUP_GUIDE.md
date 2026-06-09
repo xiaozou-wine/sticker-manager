@@ -162,14 +162,23 @@ curl http://localhost:28749/health
 # 安装 Nginx 和 certbot
 apt install -y nginx certbot python3-certbot-nginx
 
-# 先配置 Nginx
+# 先配置 Nginx（拒绝直接 IP 访问，只允许域名访问）
 cat > /etc/nginx/sites-available/sticker << 'NGINX'
 server {
+    listen 80 default_server;
+    server_name _;
+    return 444;
+}
+
+server {
+    listen 80;
     server_name sticker.你的域名.com;
-    client_max_body_size 50M;
+    client_max_body_size 500M;
 
     location / {
         proxy_pass http://127.0.0.1:28749;
+        proxy_read_timeout 300s;
+        proxy_send_timeout 300s;
         proxy_set_header Host $host;
         proxy_set_header X-Forwarded-Proto $scheme;
         proxy_set_header X-Real-IP $remote_addr;
@@ -187,6 +196,8 @@ certbot --nginx -d sticker.你的域名.com
 # 验证
 curl https://sticker.你的域名.com/health
 ```
+
+> **安全提示**：Nginx 中 `server_name _` + `return 444` 会拒绝所有非域名的直接 IP 访问，防止泄露真实 IP。`default_server` 只需在一个 server 块中设置。
 
 ---
 

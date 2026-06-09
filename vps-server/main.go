@@ -33,7 +33,7 @@ func main() {
 
 	r := gin.Default()
 	r.Use(cors())
-	r.MaxMultipartMemory = 50 << 20
+	r.MaxMultipartMemory = 500 << 20
 
 	api := r.Group("/api")
 	api.GET("/packs/:code", getPack(db))
