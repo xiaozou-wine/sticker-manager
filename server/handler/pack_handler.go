@@ -55,10 +55,6 @@ func (h *PackHandler) CreatePack(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "at least one sticker file required"})
 		return
 	}
-	if len(files) > 200 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "max 200 stickers per upload"})
-		return
-	}
 
 	packDir := filepath.Join(h.staticDir, "stickers", pack.ID)
 	if err := os.MkdirAll(packDir, 0755); err != nil {

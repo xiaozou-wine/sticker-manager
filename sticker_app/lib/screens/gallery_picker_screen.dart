@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:wechat_assets_picker/wechat_assets_picker.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 class GalleryPickerScreen extends StatefulWidget {
   final String? targetPackId;
@@ -126,12 +127,26 @@ class _GalleryPickerScreenState extends State<GalleryPickerScreen> {
   }
 
   Future<void> _pickAssets() async {
+    // Check permission first
+    final status = await Permission.photos.request();
+    if (!status.isGranted && !status.isLimited) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('需要相册权限才能选择图片'),
+            action: SnackBarAction(label: '去设置', onPressed: () => openAppSettings()),
+          ),
+        );
+      }
+      return;
+    }
+
     try {
       final List<AssetEntity>? assets = await AssetPicker.pickAssets(
         context,
         pickerConfig: AssetPickerConfig(
-          maxAssets: 200,
-          requestType: RequestType.common,
+          maxAssets: 99999,
+          requestType: RequestType.image,
           selectedAssets: _selectedAssets,
           specialPickerType: SpecialPickerType.noPreview,
         ),
@@ -145,7 +160,7 @@ class _GalleryPickerScreenState extends State<GalleryPickerScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('选择图片失败: $e')),
+          const SnackBar(content: Text('选择图片失败，请重试')),
         );
       }
     }

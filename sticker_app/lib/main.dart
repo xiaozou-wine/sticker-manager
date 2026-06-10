@@ -1,6 +1,8 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:app_links/app_links.dart';
+import 'package:receive_sharing_intent/receive_sharing_intent.dart';
 import 'services/storage_service.dart';
 import 'providers/pack_provider.dart';
 import 'providers/sticker_provider.dart';
@@ -28,6 +30,28 @@ class _MyAppState extends State<MyApp> {
   void initState() {
     super.initState();
     _initDeepLinks();
+    _initShareIntent();
+  }
+
+  void _initShareIntent() {
+    final intent = ReceiveSharingIntent.instance;
+    intent.getInitialMedia().then((files) {
+      if (files.isNotEmpty) _handleSharedFiles(files);
+    });
+    intent.getMediaStream().listen((files) {
+      if (files.isNotEmpty) _handleSharedFiles(files);
+    });
+  }
+
+  void _handleSharedFiles(List<SharedMediaFile> files) {
+    final fileList = files.map((f) => File(f.path)).toList();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _navigatorKey.currentState?.push(
+        MaterialPageRoute(
+          builder: (_) => HomeScreen(sharedFiles: fileList),
+        ),
+      );
+    });
   }
 
   void _initDeepLinks() {

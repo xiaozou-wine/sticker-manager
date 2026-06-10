@@ -5,12 +5,14 @@ import '../providers/pack_provider.dart';
 import '../models/sticker_pack.dart';
 import '../services/clipboard_service.dart';
 import 'gallery_picker_screen.dart';
+import 'album_picker_screen.dart';
 import 'pack_detail_screen.dart';
 import 'import_link_screen.dart';
 import 'share_pack_screen.dart';
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
+  final List<File>? sharedFiles;
+  const HomeScreen({super.key, this.sharedFiles});
   @override
   State<HomeScreen> createState() => _HomeScreenState();
 }
@@ -21,6 +23,9 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<PackProvider>().loadPacks();
+      if (widget.sharedFiles != null && widget.sharedFiles!.isNotEmpty) {
+        _showCreatePackDialog(context, widget.sharedFiles!);
+      }
     });
   }
 
@@ -87,6 +92,13 @@ class _HomeScreenState extends State<HomeScreen> {
             title: Text(isDesktop ? '从文件添加' : '从相册添加'),
             onTap: () { Navigator.pop(context); _addFromGallery(homeContext); },
           ),
+          if (!isDesktop)
+            ListTile(
+              leading: const Icon(Icons.collections),
+              title: const Text('从相册批量导入'),
+              subtitle: const Text('选择一个相册，导入全部照片'),
+              onTap: () { Navigator.pop(context); _importFromAlbum(homeContext); },
+            ),
           ListTile(
             leading: const Icon(Icons.link),
             title: const Text('从链接导入'),
@@ -112,6 +124,17 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _importFromLink(BuildContext context) {
     Navigator.push(context, MaterialPageRoute(builder: (_) => const ImportLinkScreen()));
+  }
+
+  Future<void> _importFromAlbum(BuildContext context) async {
+    final result = await Navigator.push<List<File>>(
+      context,
+      MaterialPageRoute(builder: (_) => const AlbumPickerScreen()),
+    );
+    if (result != null && result.isNotEmpty) {
+      if (!context.mounted) return;
+      _showCreatePackDialog(context, result);
+    }
   }
 
   void _openPackDetail(BuildContext context, StickerPack pack) {

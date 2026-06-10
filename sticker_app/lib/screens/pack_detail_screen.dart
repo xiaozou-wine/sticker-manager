@@ -1,4 +1,6 @@
 import 'dart:io';
+import 'dart:convert';
+import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:path/path.dart' as p;
@@ -53,9 +55,26 @@ class _PackDetailScreenState extends State<PackDetailScreen> {
         await packDir.create(recursive: true);
       }
 
+      // 计算包内已有表情的 hash
+      final existingHashes = <String>{};
+      await for (final entity in packDir.list()) {
+        if (entity is File) {
+          final hash = await _fileSha256(entity);
+          existingHashes.add(hash);
+        }
+      }
+
       final stickers = <Sticker>[];
+      int skipped = 0;
       for (int i = 0; i < files.length; i++) {
         final file = files[i];
+        final hash = await _fileSha256(file);
+        if (existingHashes.contains(hash)) {
+          skipped++;
+          continue;
+        }
+        existingHashes.add(hash);
+
         final ext = p.extension(file.path).toLowerCase();
         final stickerId = '${widget.pack.id}_${DateTime.now().microsecondsSinceEpoch}_$i';
         final savePath = p.join(packDir.path, '$stickerId$ext');
@@ -73,9 +92,9 @@ class _PackDetailScreenState extends State<PackDetailScreen> {
 
       await provider.addStickers(widget.pack.id, stickers);
       packProvider.refreshPack(widget.pack.id);
-      messenger.showSnackBar(
-        SnackBar(content: Text('已添加 ${stickers.length} 个表情')),
-      );
+      final msg = '已添加 ${stickers.length} 个表情'
+          '${skipped > 0 ? '，跳过 $skipped 个重复' : ''}';
+      messenger.showSnackBar(SnackBar(content: Text(msg)));
     } catch (e) {
       messenger.showSnackBar(
         const SnackBar(content: Text('导入失败，请检查文件')),
@@ -83,6 +102,11 @@ class _PackDetailScreenState extends State<PackDetailScreen> {
     } finally {
       if (mounted) setState(() => _isImporting = false);
     }
+  }
+
+  Future<String> _fileSha256(File file) async {
+    final bytes = await file.readAsBytes();
+    return sha256.convert(bytes).toString();
   }
 
   @override
