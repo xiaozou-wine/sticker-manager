@@ -325,30 +325,71 @@ class _PackDetailScreenState extends State<PackDetailScreen> {
       return;
     }
 
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('保存到相册'),
-        content: Text('将 $count 个表情保存到手机相册？'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('取消'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('确定'),
-          ),
-        ],
-      ),
-    );
+    if (!mounted) return;
 
-    if (confirmed == true && mounted) {
-      _saveToGallery(count);
+    // 检查是否有重复（BUCKET_DISPLAY_NAME 只用文件夹最后一段名）
+    final albumName = widget.pack.name;
+    final validPaths = provider.stickers
+        .where((s) => s.localPath != null && File(s.localPath!).existsSync())
+        .map((s) => s.localPath!)
+        .toList();
+
+    SaveMode mode = SaveMode.skip;
+    if (validPaths.isNotEmpty) {
+      final dupCount = await GallerySaveService.checkDuplicateCount(albumName, validPaths);
+
+      if (dupCount > 0 && mounted) {
+        final choice = await showDialog<String>(
+          context: context,
+          builder: (ctx) => SimpleDialog(
+            title: Text('发现 $dupCount 个重复表情'),
+            children: [
+              SimpleDialogOption(
+                onPressed: () => Navigator.pop(ctx, 'skip'),
+                child: const ListTile(
+                  leading: Icon(Icons.save_alt),
+                  title: Text('跳过重复'),
+                  subtitle: Text('只保存新表情，跳过已有的'),
+                  dense: true,
+                ),
+              ),
+              SimpleDialogOption(
+                onPressed: () => Navigator.pop(ctx, 'rename'),
+                child: const ListTile(
+                  leading: Icon(Icons.drive_file_rename_outline),
+                  title: Text('重命名保存'),
+                  subtitle: Text('重复的表情自动加后缀 _1, _2...'),
+                  dense: true,
+                ),
+              ),
+              SimpleDialogOption(
+                onPressed: () => Navigator.pop(ctx, 'replace'),
+                child: const ListTile(
+                  leading: Icon(Icons.refresh),
+                  title: Text('覆盖保存'),
+                  subtitle: Text('替换相册中已有的同名表情'),
+                  dense: true,
+                ),
+              ),
+            ],
+          ),
+        );
+
+        if (choice == null || !mounted) return;
+        switch (choice) {
+          case 'rename': mode = SaveMode.rename; break;
+          case 'replace': mode = SaveMode.replace; break;
+          default: mode = SaveMode.skip;
+        }
+      }
+    }
+
+    if (mounted) {
+      _saveToGallery(count, mode: mode);
     }
   }
 
-  Future<void> _saveToGallery(int total) async {
+  Future<void> _saveToGallery(int total, {SaveMode mode = SaveMode.skip}) async {
     setState(() {
       _isSaving = true;
       _saveCurrent = 0;
@@ -362,6 +403,7 @@ class _PackDetailScreenState extends State<PackDetailScreen> {
       final result = await GallerySaveService.savePackToGallery(
         storage,
         widget.pack.id,
+        mode: mode,
         onProgress: (current, total) {
           if (mounted) {
             setState(() {
@@ -374,20 +416,24 @@ class _PackDetailScreenState extends State<PackDetailScreen> {
 
       if (!mounted) return;
       final saved = result['saved'] ?? 0;
+      final skipped = result['skipped'] ?? 0;
       final failed = result['failed'] ?? 0;
-      if (failed == 0) {
-        messenger.showSnackBar(
-          SnackBar(content: Text('已保存 $saved 个表情到相册')),
-        );
+
+      String msg;
+      if (skipped > 0 && saved > 0) {
+        msg = '保存完成：新增 $saved 个，跳过 $skipped 个${failed > 0 ? '，失败 $failed 个' : ''}';
+      } else if (skipped > 0 && saved == 0) {
+        msg = '全部已存在，跳过 $skipped 个';
+      } else if (failed > 0) {
+        msg = '保存完成：成功 $saved 个，失败 $failed 个';
       } else {
-        messenger.showSnackBar(
-          SnackBar(content: Text('保存完成：成功 $saved 个，失败 $failed 个')),
-        );
+        msg = '已保存 $saved 个表情到相册';
       }
+      messenger.showSnackBar(SnackBar(content: Text(msg)));
     } catch (e) {
       if (!mounted) return;
       messenger.showSnackBar(
-        const SnackBar(content: Text('保存失败，请检查存储权限')),
+        SnackBar(content: Text('保存失败: $e')),
       );
     } finally {
       if (mounted) setState(() => _isSaving = false);
