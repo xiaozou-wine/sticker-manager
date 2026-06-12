@@ -93,6 +93,14 @@ class _PackDetailScreenState extends State<PackDetailScreen> {
 
       await provider.addStickers(widget.pack.id, stickers);
       packProvider.refreshPack(widget.pack.id);
+      // 从相册导入时记录 hash（savedToGallery: false，还没保存到系统相册）
+      if (stickers.isNotEmpty && Platform.isAndroid) {
+        final hashes = <String>[];
+        for (final f in files) {
+          try { hashes.add(await _fileSha256(f)); } catch (_) {}
+        }
+        await GallerySaveService.recordImportHashes(widget.pack.name, hashes);
+      }
       final msg = '已添加 ${stickers.length} 个表情'
           '${skipped > 0 ? '，跳过 $skipped 个重复' : ''}';
       messenger.showSnackBar(SnackBar(content: Text(msg)));
@@ -176,7 +184,9 @@ class _PackDetailScreenState extends State<PackDetailScreen> {
             stickers: provider.stickers,
             onStickerTap: _isMultiSelect
                 ? (sticker) => _toggleSelect(sticker.id)
-                : (isDesktop ? (sticker) => _copySticker(sticker) : null),
+                : (isDesktop
+                    ? (sticker) => _copySticker(sticker)
+                    : (sticker) => _previewSticker(sticker)),
             onStickerLongPress: _isMultiSelect
                 ? null
                 : (sticker) => _enterMultiSelect(sticker.id),
@@ -206,6 +216,29 @@ class _PackDetailScreenState extends State<PackDetailScreen> {
         );
       }
     }
+  }
+
+  void _previewSticker(Sticker sticker) {
+    if (sticker.localPath == null) return;
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.all(20),
+        child: GestureDetector(
+          onTap: () => Navigator.pop(ctx),
+          child: InteractiveViewer(
+            minScale: 0.5,
+            maxScale: 5.0,
+            child: Image.file(
+              File(sticker.localPath!),
+              fit: BoxFit.contain,
+              errorBuilder: (_, __, ___) => const Icon(Icons.broken_image, size: 64, color: Colors.white),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   Future<void> _addMore() async {

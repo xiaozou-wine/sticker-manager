@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -10,6 +11,7 @@ import '../models/sticker.dart';
 import '../services/api_service.dart';
 import '../services/crypto_service.dart';
 import '../services/download_service.dart';
+import '../services/gallery_save_service.dart';
 import '../providers/pack_provider.dart';
 import '../services/storage_service.dart';
 
@@ -203,6 +205,7 @@ class _ImportLinkScreenState extends State<ImportLinkScreen> {
     if (!await packDir.exists()) await packDir.create(recursive: true);
 
     final stickers = <Sticker>[];
+    final importedHashes = <String>[];
     int failedCount = 0;
     for (int i = 0; i < remoteStickers.length; i++) {
       final remote = remoteStickers[i];
@@ -215,6 +218,9 @@ class _ImportLinkScreenState extends State<ImportLinkScreen> {
         final localPath = p.join(packDir.path, '${remote.id}$ext');
         await File(localPath).writeAsBytes(decData);
         await File(tempPath).delete();
+
+        // 记录 hash（链接导入时已同时保存到相册）
+        importedHashes.add(sha256.convert(decData).toString());
 
         // Save to phone gallery (Android only, best-effort)
         if (Platform.isAndroid) {
@@ -240,6 +246,10 @@ class _ImportLinkScreenState extends State<ImportLinkScreen> {
       pack.coverLocal = stickers.first.localPath;
       pack.coverUrl = remoteStickers.first.fileUrl;
       await storage.updatePack(pack);
+      // 导入时记录 hash，标记已保存到相册
+      if (Platform.isAndroid) {
+        await GallerySaveService.recordImportHashes(pack.name, importedHashes, savedToGallery: true);
+      }
     }
 
     if (!mounted) return;
