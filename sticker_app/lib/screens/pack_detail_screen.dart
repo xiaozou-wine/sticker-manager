@@ -229,7 +229,7 @@ class _PackDetailScreenState extends State<PackDetailScreen> {
       builder: (ctx) {
         final pageController = PageController(initialPage: initialIndex);
         return Dialog(
-          backgroundColor: Colors.black87,
+          backgroundColor: Colors.white.withValues(alpha: 0.9),
           insetPadding: EdgeInsets.zero,
           child: Stack(
             children: [
