@@ -325,30 +325,57 @@ class _PackDetailScreenState extends State<PackDetailScreen> {
       return;
     }
 
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('保存到相册'),
-        content: Text('将 $count 个表情保存到手机相册？'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('取消'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('确定'),
-          ),
-        ],
-      ),
-    );
+    // 先检查是否有重复
+    final albumName = 'StickerApp/${widget.pack.name}';
+    final validPaths = provider.stickers
+        .where((s) => s.localPath != null && File(s.localPath!).existsSync())
+        .map((s) => s.localPath!)
+        .toList();
 
-    if (confirmed == true && mounted) {
-      _saveToGallery(count);
+    String dedupMode = 'skip'; // 默认去重
+    if (validPaths.isNotEmpty) {
+      try {
+        final duplicates = await GallerySaveService.checkDuplicates(validPaths, albumName);
+        final hasDuplicates = duplicates.any((d) => d);
+
+        if (hasDuplicates && mounted) {
+          final dupCount = duplicates.where((d) => d).length;
+          final choice = await showDialog<String>(
+            context: context,
+            builder: (ctx) => AlertDialog(
+              title: const Text('发现重复表情'),
+              content: Text('相册中已有 $dupCount 个同名表情，如何处理？'),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, 'cancel'),
+                  child: const Text('取消'),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, 'rename'),
+                  child: const Text('全部重命名保存'),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, 'skip'),
+                  child: const Text('跳过重复'),
+                ),
+              ],
+            ),
+          );
+
+          if (choice == null || choice == 'cancel' || !mounted) return;
+          dedupMode = choice;
+        }
+      } catch (_) {
+        // 检查失败不影响保存，继续用默认模式
+      }
+    }
+
+    if (mounted) {
+      _saveToGallery(count, dedupMode: dedupMode);
     }
   }
 
-  Future<void> _saveToGallery(int total) async {
+  Future<void> _saveToGallery(int total, {String dedupMode = 'skip'}) async {
     setState(() {
       _isSaving = true;
       _saveCurrent = 0;
@@ -362,6 +389,7 @@ class _PackDetailScreenState extends State<PackDetailScreen> {
       final result = await GallerySaveService.savePackToGallery(
         storage,
         widget.pack.id,
+        dedupMode: dedupMode,
         onProgress: (current, total) {
           if (mounted) {
             setState(() {
@@ -374,16 +402,20 @@ class _PackDetailScreenState extends State<PackDetailScreen> {
 
       if (!mounted) return;
       final saved = result['saved'] ?? 0;
+      final skipped = result['skipped'] ?? 0;
       final failed = result['failed'] ?? 0;
-      if (failed == 0) {
-        messenger.showSnackBar(
-          SnackBar(content: Text('已保存 $saved 个表情到相册')),
-        );
+
+      String msg;
+      if (skipped > 0 && saved > 0) {
+        msg = '保存完成：新增 $saved 个，跳过 $skipped 个重复${failed > 0 ? '，失败 $failed 个' : ''}';
+      } else if (skipped > 0 && saved == 0) {
+        msg = '全部重复，已跳过 $skipped 个';
+      } else if (failed > 0) {
+        msg = '保存完成：成功 $saved 个，失败 $failed 个';
       } else {
-        messenger.showSnackBar(
-          SnackBar(content: Text('保存完成：成功 $saved 个，失败 $failed 个')),
-        );
+        msg = '已保存 $saved 个表情到相册';
       }
+      messenger.showSnackBar(SnackBar(content: Text(msg)));
     } catch (e) {
       if (!mounted) return;
       messenger.showSnackBar(
