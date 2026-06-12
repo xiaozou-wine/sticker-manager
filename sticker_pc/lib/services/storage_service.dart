@@ -1,5 +1,7 @@
+import 'dart:io';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:path/path.dart';
+import 'package:path_provider/path_provider.dart';
 import '../models/sticker_pack.dart';
 import '../models/sticker.dart';
 
@@ -94,6 +96,25 @@ class StorageService {
 
   Future<void> deletePack(String id) async {
     final db = await database;
+    // Delete sticker files
+    final stickerMaps =
+        await db.query('stickers', where: 'pack_id = ?', whereArgs: [id]);
+    for (final map in stickerMaps) {
+      final localPath = map['local_path'] as String?;
+      if (localPath != null && localPath.isNotEmpty) {
+        try {
+          final file = File(localPath);
+          if (await file.exists()) await file.delete();
+        } catch (_) {}
+      }
+    }
+    // Delete pack directory
+    try {
+      final appDir = await getApplicationDocumentsDirectory();
+      final packDir = Directory(join(appDir.path, 'stickers', id));
+      if (await packDir.exists()) await packDir.delete(recursive: true);
+    } catch (_) {}
+    // Delete DB records
     await db.delete('stickers', where: 'pack_id = ?', whereArgs: [id]);
     await db.delete('sticker_packs', where: 'id = ?', whereArgs: [id]);
   }
@@ -119,7 +140,40 @@ class StorageService {
 
   Future<void> deleteSticker(String id) async {
     final db = await database;
+    // Delete file first
+    final maps =
+        await db.query('stickers', where: 'id = ?', whereArgs: [id]);
+    if (maps.isNotEmpty) {
+      final localPath = maps.first['local_path'] as String?;
+      if (localPath != null && localPath.isNotEmpty) {
+        try {
+          final file = File(localPath);
+          if (await file.exists()) await file.delete();
+        } catch (_) {}
+      }
+    }
     await db.delete('stickers', where: 'id = ?', whereArgs: [id]);
+  }
+
+  Future<void> deleteStickers(List<String> ids) async {
+    if (ids.isEmpty) return;
+    final db = await database;
+    final placeholders = List.filled(ids.length, '?').join(',');
+    // Delete files
+    final maps = await db.query('stickers',
+        where: 'id IN ($placeholders)', whereArgs: ids);
+    for (final map in maps) {
+      final localPath = map['local_path'] as String?;
+      if (localPath != null && localPath.isNotEmpty) {
+        try {
+          final file = File(localPath);
+          if (await file.exists()) await file.delete();
+        } catch (_) {}
+      }
+    }
+    // Delete DB records
+    await db.delete('stickers',
+        where: 'id IN ($placeholders)', whereArgs: ids);
   }
 
   Future<void> updatePackStickerCount(String packId) async {
