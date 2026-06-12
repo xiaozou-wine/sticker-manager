@@ -29,4 +29,12 @@ class StickerProvider extends ChangeNotifier {
     stickers.removeWhere((s) => s.id == stickerId);
     notifyListeners();
   }
+
+  Future<void> deleteStickers(String packId, List<String> ids) async {
+    if (ids.isEmpty) return;
+    await storage.deleteStickers(ids);
+    await storage.updatePackStickerCount(packId);
+    stickers.removeWhere((s) => ids.contains(s.id));
+    notifyListeners();
+  }
 }
