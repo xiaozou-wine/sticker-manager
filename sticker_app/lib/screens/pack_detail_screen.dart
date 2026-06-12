@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'dart:convert';
 import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -325,30 +324,64 @@ class _PackDetailScreenState extends State<PackDetailScreen> {
       return;
     }
 
-    final confirmed = await showDialog<bool>(
+    if (!mounted) return;
+    final choice = await showDialog<String>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('保存到相册'),
-        content: Text('将 $count 个表情保存到手机相册？'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('取消'),
+      builder: (ctx) => SimpleDialog(
+        title: Text('保存 $count 个表情到相册'),
+        children: [
+          SimpleDialogOption(
+            onPressed: () => Navigator.pop(ctx, 'skip'),
+            child: const ListTile(
+              leading: Icon(Icons.save_alt),
+              title: Text('跳过重复'),
+              subtitle: Text('按内容自动去重，只保存新表情'),
+              dense: true,
+            ),
           ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('确定'),
+          SimpleDialogOption(
+            onPressed: () => Navigator.pop(ctx, 'rename'),
+            child: const ListTile(
+              leading: Icon(Icons.drive_file_rename_outline),
+              title: Text('重命名保存'),
+              subtitle: Text('重复的表情自动加后缀 _1, _2...'),
+              dense: true,
+            ),
+          ),
+          SimpleDialogOption(
+            onPressed: () => Navigator.pop(ctx, 'replace'),
+            child: const ListTile(
+              leading: Icon(Icons.refresh),
+              title: Text('覆盖保存'),
+              subtitle: Text('删除当前相册内容后重新保存，不可恢复'),
+              dense: true,
+            ),
           ),
         ],
       ),
     );
 
-    if (confirmed == true && mounted) {
-      _saveToGallery(count);
+    if (choice == null || !mounted) return;
+
+    if (choice == 'replace') {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('确认覆盖'),
+          content: const Text('相册中的所有现有内容将被删除，然后重新保存。此操作不可恢复。'),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('取消')),
+            TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('确认覆盖', style: TextStyle(color: Colors.red))),
+          ],
+        ),
+      );
+      if (confirmed != true || !mounted) return;
     }
+
+    _saveToGallery(count, mode: choice);
   }
 
-  Future<void> _saveToGallery(int total) async {
+  Future<void> _saveToGallery(int total, {String mode = 'skip'}) async {
     setState(() {
       _isSaving = true;
       _saveCurrent = 0;
@@ -362,6 +395,7 @@ class _PackDetailScreenState extends State<PackDetailScreen> {
       final result = await GallerySaveService.savePackToGallery(
         storage,
         widget.pack.id,
+        mode: mode,
         onProgress: (current, total) {
           if (mounted) {
             setState(() {
@@ -374,20 +408,25 @@ class _PackDetailScreenState extends State<PackDetailScreen> {
 
       if (!mounted) return;
       final saved = result['saved'] ?? 0;
+      final skipped = result['skipped'] ?? 0;
       final failed = result['failed'] ?? 0;
-      if (failed == 0) {
-        messenger.showSnackBar(
-          SnackBar(content: Text('已保存 $saved 个表情到相册')),
-        );
+      final debug = result['debug'] ?? '';
+
+      String msg;
+      if (skipped > 0 && saved > 0) {
+        msg = '保存完成：新增 $saved 个，跳过 $skipped 个${failed > 0 ? '，失败 $failed 个' : ''}';
+      } else if (skipped > 0 && saved == 0) {
+        msg = '全部已存在，跳过 $skipped 个';
+      } else if (failed > 0) {
+        msg = '保存完成：成功 $saved 个，失败 $failed 个';
       } else {
-        messenger.showSnackBar(
-          SnackBar(content: Text('保存完成：成功 $saved 个，失败 $failed 个')),
-        );
+        msg = '已保存 $saved 个表情到相册';
       }
+      messenger.showSnackBar(SnackBar(content: Text('$msg\n$debug'), duration: const Duration(seconds: 3)));
     } catch (e) {
       if (!mounted) return;
       messenger.showSnackBar(
-        const SnackBar(content: Text('保存失败，请检查存储权限')),
+        SnackBar(content: Text('保存失败: $e')),
       );
     } finally {
       if (mounted) setState(() => _isSaving = false);
