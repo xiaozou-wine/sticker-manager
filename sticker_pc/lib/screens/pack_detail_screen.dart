@@ -27,6 +27,8 @@ class _PackDetailScreenState extends State<PackDetailScreen> {
   bool _isExporting = false;
   int _exportCurrent = 0;
   int _exportTotal = 0;
+  bool _isMultiSelect = false;
+  final Set<String> _selectedIds = {};
 
   @override
   void initState() {
@@ -79,29 +81,45 @@ class _PackDetailScreenState extends State<PackDetailScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.pack.name),
+        title: _isMultiSelect
+            ? Text('已选 ${_selectedIds.length} 个')
+            : Text(widget.pack.name),
+        leading: _isMultiSelect
+            ? IconButton(
+                icon: const Icon(Icons.close),
+                onPressed: _exitMultiSelect,
+              )
+            : null,
         actions: [
-          if (_isExporting)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              child: Row(mainAxisSize: MainAxisSize.min, children: [
-                const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
-                const SizedBox(width: 6),
-                Text('$_exportCurrent/$_exportTotal', style: const TextStyle(fontSize: 13)),
-                const SizedBox(width: 8),
-              ]),
+          if (_isMultiSelect)
+            IconButton(
+              icon: const Icon(Icons.delete_outline),
+              onPressed: _selectedIds.isEmpty ? null : _deleteSelected,
+              tooltip: '删除选中',
             )
-          else if (!_isImporting) ...[
-            IconButton(icon: const Icon(Icons.edit), onPressed: _renamePack, tooltip: '重命名'),
-            IconButton(icon: const Icon(Icons.folder_open), onPressed: _exportToFolder, tooltip: '导出到文件夹'),
+          else ...[
+            if (_isExporting)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
+                  const SizedBox(width: 6),
+                  Text('$_exportCurrent/$_exportTotal', style: const TextStyle(fontSize: 13)),
+                  const SizedBox(width: 8),
+                ]),
+              )
+            else if (!_isImporting) ...[
+              IconButton(icon: const Icon(Icons.edit), onPressed: _renamePack, tooltip: '重命名'),
+              IconButton(icon: const Icon(Icons.folder_open), onPressed: _exportToFolder, tooltip: '导出到文件夹'),
+            ],
+            if (_isImporting)
+              const Padding(
+                padding: EdgeInsets.all(16),
+                child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
+              )
+            else if (!_isExporting)
+              IconButton(icon: const Icon(Icons.add_photo_alternate), onPressed: _addMore, tooltip: '添加表情'),
           ],
-          if (_isImporting)
-            const Padding(
-              padding: EdgeInsets.all(16),
-              child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
-            )
-          else if (!_isExporting)
-            IconButton(icon: const Icon(Icons.add_photo_alternate), onPressed: _addMore, tooltip: '添加表情'),
         ],
       ),
       body: Consumer<StickerProvider>(
@@ -109,8 +127,9 @@ class _PackDetailScreenState extends State<PackDetailScreen> {
           if (provider.isLoading) return const Center(child: CircularProgressIndicator());
           return StickerGrid(
             stickers: provider.stickers,
-            onStickerTap: (sticker) => _copySticker(sticker),
-            onStickerLongPress: (sticker) => _showDeleteStickerDialog(sticker),
+            selectedIds: _selectedIds,
+            onStickerTap: (sticker) => _onStickerTapped(sticker),
+            onStickerLongPress: (sticker) => _enterMultiSelect(sticker),
           );
         },
       ),
@@ -131,6 +150,61 @@ class _PackDetailScreenState extends State<PackDetailScreen> {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('复制失败: $e')));
       }
     }
+  }
+
+  void _onStickerTapped(Sticker sticker) {
+    if (_isMultiSelect) {
+      setState(() {
+        if (_selectedIds.contains(sticker.id)) {
+          _selectedIds.remove(sticker.id);
+          if (_selectedIds.isEmpty) _isMultiSelect = false;
+        } else {
+          _selectedIds.add(sticker.id);
+        }
+      });
+    } else {
+      _copySticker(sticker);
+    }
+  }
+
+  void _enterMultiSelect(Sticker sticker) {
+    setState(() {
+      _isMultiSelect = true;
+      _selectedIds.clear();
+      _selectedIds.add(sticker.id);
+    });
+  }
+
+  void _exitMultiSelect() {
+    setState(() {
+      _isMultiSelect = false;
+      _selectedIds.clear();
+    });
+  }
+
+  Future<void> _deleteSelected() async {
+    final count = _selectedIds.length;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('批量删除'),
+        content: Text('确定要删除选中的 $count 个表情吗？'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('取消')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('删除'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    if (!mounted) return;
+    final ids = _selectedIds.toList();
+    _exitMultiSelect();
+    await context.read<StickerProvider>().deleteStickers(widget.pack.id, ids);
+    if (mounted) context.read<PackProvider>().refreshPack(widget.pack.id);
   }
 
   Future<void> _addMore() async {

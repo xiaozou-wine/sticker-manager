@@ -1,6 +1,9 @@
+import 'dart:io';
+import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import '../models/sticker.dart';
 import '../services/storage_service.dart';
+import '../services/gallery_save_service.dart';
 
 class StickerProvider extends ChangeNotifier {
   final StorageService _storage;
@@ -43,9 +46,46 @@ class StickerProvider extends ChangeNotifier {
   }
 
   Future<void> deleteSticker(String packId, String stickerId) async {
+    // 删除前计算 hash，从 hash 文件中清除
+    final sticker = _stickers.firstWhere((s) => s.id == stickerId, orElse: () => Sticker(id: '', packId: '', type: ''));
+    if (sticker.localPath != null) {
+      try {
+        final bytes = await File(sticker.localPath!).readAsBytes();
+        final hash = sha256.convert(bytes).toString();
+        // 获取 packName 用于 hash 文件名
+        final pack = await _storage.getPackById(packId);
+        if (pack != null) {
+          await GallerySaveService.removeHashes(pack.name, [hash]);
+        }
+      } catch (_) {}
+    }
     await _storage.deleteSticker(stickerId);
     await _storage.updatePackStickerCount(packId);
     _stickers.removeWhere((s) => s.id == stickerId);
+    notifyListeners();
+  }
+
+  Future<void> deleteStickers(String packId, List<String> ids) async {
+    // 批量删除前计算 hash
+    final hashes = <String>[];
+    for (final id in ids) {
+      final s = _stickers.firstWhere((st) => st.id == id, orElse: () => Sticker(id: '', packId: '', type: ''));
+      if (s.localPath != null) {
+        try {
+          final bytes = await File(s.localPath!).readAsBytes();
+          hashes.add(sha256.convert(bytes).toString());
+        } catch (_) {}
+      }
+    }
+    if (hashes.isNotEmpty) {
+      final pack = await _storage.getPackById(packId);
+      if (pack != null) {
+        await GallerySaveService.removeHashes(pack.name, hashes);
+      }
+    }
+    await _storage.deleteStickers(ids);
+    await _storage.updatePackStickerCount(packId);
+    _stickers.removeWhere((s) => ids.contains(s.id));
     notifyListeners();
   }
 }

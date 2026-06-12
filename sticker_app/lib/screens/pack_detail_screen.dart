@@ -93,6 +93,14 @@ class _PackDetailScreenState extends State<PackDetailScreen> {
 
       await provider.addStickers(widget.pack.id, stickers);
       packProvider.refreshPack(widget.pack.id);
+      // 从相册导入时记录 hash（savedToGallery: false，还没保存到系统相册）
+      if (stickers.isNotEmpty && Platform.isAndroid) {
+        final hashes = <String>[];
+        for (final f in files) {
+          try { hashes.add(await _fileSha256(f)); } catch (_) {}
+        }
+        await GallerySaveService.recordImportHashes(widget.pack.name, hashes);
+      }
       final msg = '已添加 ${stickers.length} 个表情'
           '${skipped > 0 ? '，跳过 $skipped 个重复' : ''}';
       messenger.showSnackBar(SnackBar(content: Text(msg)));
@@ -176,7 +184,9 @@ class _PackDetailScreenState extends State<PackDetailScreen> {
             stickers: provider.stickers,
             onStickerTap: _isMultiSelect
                 ? (sticker) => _toggleSelect(sticker.id)
-                : (isDesktop ? (sticker) => _copySticker(sticker) : null),
+                : (isDesktop
+                    ? (sticker) => _copySticker(sticker)
+                    : (sticker) => _previewSticker(sticker)),
             onStickerLongPress: _isMultiSelect
                 ? null
                 : (sticker) => _enterMultiSelect(sticker.id),
@@ -206,6 +216,55 @@ class _PackDetailScreenState extends State<PackDetailScreen> {
         );
       }
     }
+  }
+
+  void _previewSticker(Sticker sticker) {
+    final provider = context.read<StickerProvider>();
+    final stickers = provider.stickers;
+    final initialIndex = stickers.indexWhere((s) => s.id == sticker.id);
+    if (initialIndex < 0) return;
+
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        final pageController = PageController(initialPage: initialIndex);
+        return Dialog(
+          backgroundColor: Colors.black87,
+          insetPadding: EdgeInsets.zero,
+          child: Stack(
+            children: [
+              PageView.builder(
+                controller: pageController,
+                itemCount: stickers.length,
+                itemBuilder: (_, index) {
+                  final s = stickers[index];
+                  if (s.localPath == null) return const SizedBox();
+                  return InteractiveViewer(
+                    minScale: 0.5,
+                    maxScale: 5.0,
+                    child: Center(
+                      child: Image.file(
+                        File(s.localPath!),
+                        fit: BoxFit.contain,
+                        errorBuilder: (_, __, ___) => const Icon(Icons.broken_image, size: 64, color: Colors.white),
+                      ),
+                    ),
+                  );
+                },
+              ),
+              Positioned(
+                top: 8,
+                right: 8,
+                child: IconButton(
+                  icon: const Icon(Icons.close, color: Colors.white, size: 28),
+                  onPressed: () => Navigator.pop(ctx),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   Future<void> _addMore() async {
@@ -245,8 +304,9 @@ class _PackDetailScreenState extends State<PackDetailScreen> {
               widget.pack.name = newName;
               final storage = context.read<StorageService>();
               await storage.updatePack(widget.pack);
+              if (!mounted) return;
               context.read<PackProvider>().loadPacks();
-              if (mounted) setState(() {});
+              setState(() {});
             },
             child: const Text('确定'),
           ),
@@ -310,32 +370,6 @@ class _PackDetailScreenState extends State<PackDetailScreen> {
     _exitMultiSelect();
   }
 
-  void _showDeleteStickerDialog(Sticker sticker) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('删除表情'),
-        content: const Text('确定要删除这个表情吗？'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('取消'),
-          ),
-          TextButton(
-            onPressed: () {
-              context
-                  .read<StickerProvider>()
-                  .deleteSticker(widget.pack.id, sticker.id);
-              context.read<PackProvider>().refreshPack(widget.pack.id);
-              Navigator.pop(ctx);
-            },
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text('删除'),
-          ),
-        ],
-      ),
-    );
-  }
 
   Future<void> _exportToFolder() async {
     final provider = context.read<StickerProvider>();
