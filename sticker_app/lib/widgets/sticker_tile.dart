@@ -7,6 +7,7 @@ class StickerTile extends StatefulWidget {
   final String? imageUrl;
   final VoidCallback? onTap;
   final VoidCallback? onLongPress;
+  final bool isSelected;
 
   const StickerTile({
     super.key,
@@ -14,6 +15,7 @@ class StickerTile extends StatefulWidget {
     this.imageUrl,
     this.onTap,
     this.onLongPress,
+    this.isSelected = false,
   });
 
   @override
@@ -33,16 +35,25 @@ class _StickerTileState extends State<StickerTile> {
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(8),
           color: Colors.grey[200],
-          border: _hovered
-              ? Border.all(color: Theme.of(context).colorScheme.primary, width: 2)
-              : null,
+          border: widget.isSelected
+              ? Border.all(color: Theme.of(context).colorScheme.primary, width: 3)
+              : _hovered
+                  ? Border.all(color: Theme.of(context).colorScheme.primary, width: 2)
+                  : null,
         ),
         clipBehavior: Clip.antiAlias,
         child: Stack(
           fit: StackFit.expand,
           children: [
             _buildImage(),
-            if (_hovered && widget.onTap != null)
+            if (widget.isSelected)
+              Container(
+                color: Colors.blue.withValues(alpha: 0.3),
+                child: const Center(
+                  child: Icon(Icons.check_circle, color: Colors.white, size: 28),
+                ),
+              )
+            else if (_hovered && widget.onTap != null)
               Container(
                 color: Colors.black26,
                 child: const Center(

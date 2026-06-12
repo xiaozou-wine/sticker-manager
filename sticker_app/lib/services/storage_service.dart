@@ -1,5 +1,7 @@
+import 'dart:io';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
+import 'package:path_provider/path_provider.dart';
 import '../models/sticker_pack.dart';
 import '../models/sticker.dart';
 
@@ -89,8 +91,22 @@ class StorageService {
 
   Future<void> deletePack(String id) async {
     final db = await database;
+    // 先查出所有表情文件路径
+    final stickers = await getStickersByPackId(id);
     await db.delete('stickers', where: 'pack_id = ?', whereArgs: [id]);
     await db.delete('sticker_packs', where: 'id = ?', whereArgs: [id]);
+    // 删除文件
+    for (final s in stickers) {
+      if (s.localPath != null) {
+        try { await File(s.localPath!).delete(); } catch (_) {}
+      }
+    }
+    // 删除 pack 目录
+    try {
+      final appDir = await getApplicationDocumentsDirectory();
+      final packDir = Directory(join(appDir.path, 'stickers', id));
+      if (await packDir.exists()) await packDir.delete(recursive: true);
+    } catch (_) {}
   }
 
   // --- Sticker CRUD ---
@@ -114,7 +130,31 @@ class StorageService {
 
   Future<void> deleteSticker(String id) async {
     final db = await database;
+    // 先查出文件路径
+    final maps = await db.query('stickers', where: 'id = ?', whereArgs: [id]);
+    if (maps.isNotEmpty) {
+      final localPath = maps[0]['local_path'] as String?;
+      if (localPath != null) {
+        try { await File(localPath).delete(); } catch (_) {}
+      }
+    }
     await db.delete('stickers', where: 'id = ?', whereArgs: [id]);
+  }
+
+  /// 批量删除表情（含文件）
+  Future<void> deleteStickers(List<String> ids) async {
+    if (ids.isEmpty) return;
+    final db = await database;
+    final placeholders = List.filled(ids.length, '?').join(',');
+    // 查出所有文件路径
+    final maps = await db.query('stickers', where: 'id IN ($placeholders)', whereArgs: ids);
+    for (final m in maps) {
+      final localPath = m['local_path'] as String?;
+      if (localPath != null) {
+        try { await File(localPath).delete(); } catch (_) {}
+      }
+    }
+    await db.delete('stickers', where: 'id IN ($placeholders)', whereArgs: ids);
   }
 
   Future<void> updatePackStickerCount(String packId) async {

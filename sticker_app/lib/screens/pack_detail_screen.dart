@@ -30,6 +30,8 @@ class _PackDetailScreenState extends State<PackDetailScreen> {
   bool _isSaving = false;
   int _saveCurrent = 0;
   int _saveTotal = 0;
+  bool _isMultiSelect = false;
+  final Set<String> _selectedIds = {};
 
   @override
   void initState() {
@@ -113,9 +115,20 @@ class _PackDetailScreenState extends State<PackDetailScreen> {
     final isDesktop = ClipboardService.isDesktop;
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.pack.name),
+        title: _isMultiSelect
+            ? Text('已选 ${_selectedIds.length} 个')
+            : Text(widget.pack.name),
+        leading: _isMultiSelect
+            ? IconButton(icon: const Icon(Icons.close), onPressed: _exitMultiSelect)
+            : null,
         actions: [
-          if (_isSaving)
+          if (_isMultiSelect) ...[
+            IconButton(
+              icon: const Icon(Icons.delete),
+              onPressed: _deleteSelected,
+              tooltip: '删除选中',
+            ),
+          ] else if (_isSaving)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 8),
               child: Row(
@@ -140,17 +153,18 @@ class _PackDetailScreenState extends State<PackDetailScreen> {
               tooltip: isDesktop ? '导出到文件夹' : '保存到相册',
             ),
           ],
-          if (_isImporting)
-            const Padding(
-              padding: EdgeInsets.all(16),
-              child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
-            )
-          else if (!_isSaving)
-            IconButton(
-              icon: const Icon(Icons.add_photo_alternate),
-              onPressed: _addMore,
-              tooltip: '添加表情',
-            ),
+          if (!_isMultiSelect)
+            if (_isImporting)
+              const Padding(
+                padding: EdgeInsets.all(16),
+                child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
+              )
+            else if (!_isSaving)
+              IconButton(
+                icon: const Icon(Icons.add_photo_alternate),
+                onPressed: _addMore,
+                tooltip: '添加表情',
+              ),
         ],
       ),
       body: Consumer<StickerProvider>(
@@ -160,8 +174,13 @@ class _PackDetailScreenState extends State<PackDetailScreen> {
           }
           return StickerGrid(
             stickers: provider.stickers,
-            onStickerTap: isDesktop ? (sticker) => _copySticker(sticker) : null,
-            onStickerLongPress: (sticker) => _showDeleteStickerDialog(sticker),
+            onStickerTap: _isMultiSelect
+                ? (sticker) => _toggleSelect(sticker.id)
+                : (isDesktop ? (sticker) => _copySticker(sticker) : null),
+            onStickerLongPress: _isMultiSelect
+                ? null
+                : (sticker) => _enterMultiSelect(sticker.id),
+            selectedIds: _isMultiSelect ? _selectedIds : null,
           );
         },
       ),
@@ -234,6 +253,61 @@ class _PackDetailScreenState extends State<PackDetailScreen> {
         ],
       ),
     );
+  }
+
+  void _enterMultiSelect(String stickerId) {
+    setState(() {
+      _isMultiSelect = true;
+      _selectedIds.clear();
+      _selectedIds.add(stickerId);
+    });
+  }
+
+  void _exitMultiSelect() {
+    setState(() {
+      _isMultiSelect = false;
+      _selectedIds.clear();
+    });
+  }
+
+  void _toggleSelect(String stickerId) {
+    setState(() {
+      if (_selectedIds.contains(stickerId)) {
+        _selectedIds.remove(stickerId);
+        if (_selectedIds.isEmpty) _isMultiSelect = false;
+      } else {
+        _selectedIds.add(stickerId);
+      }
+    });
+  }
+
+  Future<void> _deleteSelected() async {
+    if (_selectedIds.isEmpty) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('删除 ${_selectedIds.length} 个表情'),
+        content: const Text('确定删除？文件也会被移除。'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('取消')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('删除'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    final provider = context.read<StickerProvider>();
+    final storage = StorageService();
+    await storage.deleteStickers(_selectedIds.toList());
+    await storage.updatePackStickerCount(widget.pack.id);
+    if (!mounted) return;
+    provider.loadStickers(widget.pack.id);
+    context.read<PackProvider>().refreshPack(widget.pack.id);
+    _exitMultiSelect();
   }
 
   void _showDeleteStickerDialog(Sticker sticker) {

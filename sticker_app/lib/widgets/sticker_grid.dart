@@ -7,6 +7,7 @@ class StickerGrid extends StatelessWidget {
   final Function(Sticker)? onStickerTap;
   final Function(Sticker)? onStickerLongPress;
   final String? baseUrl;
+  final Set<String>? selectedIds;
 
   const StickerGrid({
     super.key,
@@ -14,6 +15,7 @@ class StickerGrid extends StatelessWidget {
     this.onStickerTap,
     this.onStickerLongPress,
     this.baseUrl,
+    this.selectedIds,
   });
 
   @override
@@ -51,6 +53,7 @@ class StickerGrid extends StatelessWidget {
               onLongPress: onStickerLongPress != null
                   ? () => onStickerLongPress!(sticker)
                   : null,
+              isSelected: selectedIds?.contains(sticker.id) ?? false,
             );
           },
         );
