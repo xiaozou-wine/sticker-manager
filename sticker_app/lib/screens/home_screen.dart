@@ -22,7 +22,8 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<PackProvider>().loadPacks();
+      final provider = context.read<PackProvider>();
+      provider.loadSortMode().then((_) => provider.loadPacks());
       if (widget.sharedFiles != null && widget.sharedFiles!.isNotEmpty) {
         _showCreatePackDialog(context, widget.sharedFiles!);
       }
@@ -35,6 +36,9 @@ class _HomeScreenState extends State<HomeScreen> {
       appBar: AppBar(
         title: const Text('表情包管理'),
         centerTitle: true,
+        actions: [
+          _buildSortButton(),
+        ],
       ),
       body: Consumer<PackProvider>(
         builder: (context, provider, _) {
@@ -55,21 +59,22 @@ class _HomeScreenState extends State<HomeScreen> {
               ]),
             );
           }
-          return RefreshIndicator(
-            onRefresh: provider.loadPacks,
-            child: ListView.builder(
-              padding: const EdgeInsets.all(12),
-              itemCount: provider.packs.length,
-              itemBuilder: (context, index) {
-                final pack = provider.packs[index];
-                return _PackCard(
-                  pack: pack,
-                  onTap: () => _openPackDetail(context, pack),
-                  onLongPress: () => _showDeleteDialog(context, pack),
-                  onShare: () => _sharePack(context, pack),
-                );
-              },
-            ),
+          return ReorderableListView.builder(
+            padding: const EdgeInsets.all(12),
+            itemCount: provider.packs.length,
+            onReorderItem: (oldIndex, newIndex) {
+              provider.reorderPacks(oldIndex, newIndex);
+            },
+            itemBuilder: (context, index) {
+              final pack = provider.packs[index];
+              return _PackCard(
+                key: ValueKey(pack.id),
+                pack: pack,
+                onTap: () => _openPackDetail(context, pack),
+                onShare: () => _sharePack(context, pack),
+                onDelete: () => _showDeleteDialog(context, pack),
+              );
+            },
           );
         },
       ),
@@ -78,6 +83,42 @@ class _HomeScreenState extends State<HomeScreen> {
         icon: const Icon(Icons.add),
         label: const Text('添加'),
       ),
+    );
+  }
+
+  Widget _buildSortButton() {
+    return Consumer<PackProvider>(
+      builder: (context, provider, _) {
+        return PopupMenuButton<String>(
+          icon: const Icon(Icons.sort),
+          tooltip: '排序',
+          onSelected: (mode) => provider.setSortMode(mode),
+          itemBuilder: (_) => [
+            _sortItem('updated', '最近更新', Icons.access_time, provider.sortMode),
+            _sortItem('created', '创建时间', Icons.calendar_today, provider.sortMode),
+            _sortItem('name', '名称', Icons.sort_by_alpha, provider.sortMode),
+            _sortItem('count', '表情数量', Icons.numbers, provider.sortMode),
+          ],
+        );
+      },
+    );
+  }
+
+  PopupMenuItem<String> _sortItem(String value, String label, IconData icon, String current) {
+    return PopupMenuItem(
+      value: value,
+      child: Row(children: [
+        Icon(icon, size: 20, color: current == value ? Theme.of(context).colorScheme.primary : null),
+        const SizedBox(width: 12),
+        Text(label, style: TextStyle(
+          fontWeight: current == value ? FontWeight.bold : FontWeight.normal,
+          color: current == value ? Theme.of(context).colorScheme.primary : null,
+        )),
+        if (current == value) ...[
+          const Spacer(),
+          Icon(Icons.check, size: 18, color: Theme.of(context).colorScheme.primary),
+        ],
+      ]),
     );
   }
 
@@ -112,9 +153,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _addFromGallery(BuildContext context) async {
     final result = await Navigator.push<List<File>>(
       context,
-      MaterialPageRoute(
-        builder: (_) => const GalleryPickerScreen(),
-      ),
+      MaterialPageRoute(builder: (_) => const GalleryPickerScreen()),
     );
     if (result != null && result.isNotEmpty) {
       if (!context.mounted) return;
@@ -201,9 +240,9 @@ class _HomeScreenState extends State<HomeScreen> {
 class _PackCard extends StatelessWidget {
   final StickerPack pack;
   final VoidCallback onTap;
-  final VoidCallback onLongPress;
   final VoidCallback onShare;
-  const _PackCard({required this.pack, required this.onTap, required this.onLongPress, required this.onShare});
+  final VoidCallback onDelete;
+  const _PackCard({super.key, required this.pack, required this.onTap, required this.onShare, required this.onDelete});
 
   @override
   Widget build(BuildContext context) {
@@ -212,7 +251,6 @@ class _PackCard extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onTap,
-        onLongPress: onLongPress,
         child: Padding(
           padding: const EdgeInsets.all(12),
           child: Row(children: [
@@ -229,7 +267,17 @@ class _PackCard extends StatelessWidget {
                 ],
               ]),
             ),
-            IconButton(icon: const Icon(Icons.share, size: 20), onPressed: onShare, tooltip: '分享'),
+            PopupMenuButton<String>(
+              icon: const Icon(Icons.more_vert, size: 20),
+              onSelected: (value) {
+                if (value == 'share') onShare();
+                if (value == 'delete') onDelete();
+              },
+              itemBuilder: (_) => [
+                const PopupMenuItem(value: 'share', child: Row(children: [Icon(Icons.share, size: 18), SizedBox(width: 8), Text('分享')])),
+                const PopupMenuItem(value: 'delete', child: Row(children: [Icon(Icons.delete, size: 18, color: Colors.red), SizedBox(width: 8), Text('删除', style: TextStyle(color: Colors.red))])),
+              ],
+            ),
           ]),
         ),
       ),
@@ -242,8 +290,7 @@ class _PackCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(8),
         child: Image.file(
           File(pack.coverLocal!),
-          width: 56,
-          height: 56,
+          width: 56, height: 56,
           fit: BoxFit.cover,
           errorBuilder: (_, __, ___) => _buildPlaceholder(),
         ),

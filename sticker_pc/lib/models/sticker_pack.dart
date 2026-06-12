@@ -8,6 +8,7 @@ class StickerPack {
   String? shareCode;
   bool isUploaded;
   int stickerCount;
+  int sortOrder;
   final DateTime createdAt;
   DateTime updatedAt;
 
@@ -21,6 +22,7 @@ class StickerPack {
     this.shareCode,
     this.isUploaded = false,
     this.stickerCount = 0,
+    this.sortOrder = 0,
     DateTime? createdAt,
     DateTime? updatedAt,
   })  : createdAt = createdAt ?? DateTime.now(),
@@ -37,6 +39,7 @@ class StickerPack {
       'share_code': shareCode,
       'is_uploaded': isUploaded ? 1 : 0,
       'sticker_count': stickerCount,
+      'sort_order': sortOrder,
       'created_at': createdAt.toIso8601String(),
       'updated_at': updatedAt.toIso8601String(),
     };
@@ -53,6 +56,7 @@ class StickerPack {
       shareCode: map['share_code'],
       isUploaded: map['is_uploaded'] == 1,
       stickerCount: map['sticker_count'] ?? 0,
+      sortOrder: map['sort_order'] ?? 0,
       createdAt: DateTime.parse(map['created_at']),
       updatedAt: DateTime.parse(map['updated_at']),
     );

@@ -104,4 +104,26 @@ class SettingsService {
     await f.create(recursive: true);
     await f.writeAsString(json.encode(data));
   }
+
+  static Future<String> loadSortMode() async {
+    try {
+      final f = await _file;
+      if (!await f.exists()) return 'updated';
+      final data = json.decode(await f.readAsString());
+      return data['sortMode'] ?? 'updated';
+    } catch (_) {
+      return 'updated';
+    }
+  }
+
+  static Future<void> saveSortMode(String mode) async {
+    final f = await _file;
+    Map<String, dynamic> data = {};
+    if (await f.exists()) {
+      data = json.decode(await f.readAsString());
+    }
+    data['sortMode'] = mode;
+    await f.create(recursive: true);
+    await f.writeAsString(json.encode(data));
+  }
 }

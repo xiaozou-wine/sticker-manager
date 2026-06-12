@@ -45,6 +45,7 @@ class _PackDetailScreenState extends State<PackDetailScreen> {
     setState(() => _isImporting = true);
     final provider = context.read<StickerProvider>();
     final packProvider = context.read<PackProvider>();
+    final storage = context.read<StorageService>();
     final messenger = ScaffoldMessenger.of(context);
     try {
       final appDir = await getApplicationDocumentsDirectory();
@@ -68,6 +69,18 @@ class _PackDetailScreenState extends State<PackDetailScreen> {
       }
 
       await provider.addStickers(widget.pack.id, stickers);
+      if (mounted && stickers.isNotEmpty) {
+        final needsCover = widget.pack.coverLocal == null ||
+            widget.pack.coverLocal!.isEmpty ||
+            !File(widget.pack.coverLocal!).existsSync();
+        if (needsCover) {
+          final freshPack = await storage.getPackById(widget.pack.id);
+          if (freshPack != null) {
+            freshPack.coverLocal = stickers.first.localPath;
+            await storage.updatePack(freshPack);
+          }
+        }
+      }
       packProvider.refreshPack(widget.pack.id);
       messenger.showSnackBar(SnackBar(content: Text('已添加 ${stickers.length} 个表情')));
     } catch (e) {

@@ -92,6 +92,18 @@ class _PackDetailScreenState extends State<PackDetailScreen> {
       }
 
       await provider.addStickers(widget.pack.id, stickers);
+      if (mounted && stickers.isNotEmpty) {
+        final needsCover = widget.pack.coverLocal == null ||
+            widget.pack.coverLocal!.isEmpty ||
+            !File(widget.pack.coverLocal!).existsSync();
+        if (needsCover) {
+          final freshPack = await StorageService().getPackById(widget.pack.id);
+          if (freshPack != null) {
+            freshPack.coverLocal = stickers.first.localPath;
+            await StorageService().updatePack(freshPack);
+          }
+        }
+      }
       packProvider.refreshPack(widget.pack.id);
       // 从相册导入时记录 hash（savedToGallery: false，还没保存到系统相册）
       if (stickers.isNotEmpty && Platform.isAndroid) {
@@ -229,7 +241,7 @@ class _PackDetailScreenState extends State<PackDetailScreen> {
       builder: (ctx) {
         final pageController = PageController(initialPage: initialIndex);
         return Dialog(
-          backgroundColor: Colors.white.withValues(alpha: 0.9),
+          backgroundColor: Colors.transparent,
           insetPadding: EdgeInsets.zero,
           child: Stack(
             children: [

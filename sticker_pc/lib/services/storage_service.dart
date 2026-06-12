@@ -25,7 +25,7 @@ class StorageService {
     final path = join(dbPath, 'sticker_pc.db');
     return openDatabase(
       path,
-      version: 1,
+      version: 2,
       onConfigure: (db) async {
         await db.execute('PRAGMA foreign_keys = ON');
       },
@@ -41,6 +41,7 @@ class StorageService {
             share_code TEXT,
             is_uploaded INTEGER DEFAULT 0,
             sticker_count INTEGER DEFAULT 0,
+            sort_order INTEGER DEFAULT 0,
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL
           )
@@ -62,6 +63,31 @@ class StorageService {
         await db.execute(
             'CREATE INDEX idx_stickers_pack_id ON stickers(pack_id)');
       },
+      onUpgrade: (db, oldVersion, newVersion) async {
+        if (oldVersion < 2) {
+          await db.execute('ALTER TABLE sticker_packs ADD COLUMN sort_order INTEGER DEFAULT 0');
+          final rows = await db.query('sticker_packs', orderBy: 'updated_at DESC');
+          for (int i = 0; i < rows.length; i++) {
+            final id = rows[i]['id'] as String;
+            await db.update('sticker_packs', {'sort_order': i},
+                where: 'id = ?', whereArgs: [id]);
+            // 为没有封面但有表情的包设置封面
+            final cover = rows[i]['cover_local'] as String?;
+            if (cover == null || cover.isEmpty) {
+              final stickers = await db.query('stickers',
+                  where: 'pack_id = ?', whereArgs: [id],
+                  orderBy: 'created_at', limit: 1);
+              if (stickers.isNotEmpty) {
+                final localPath = stickers.first['local_path'] as String?;
+                if (localPath != null && localPath.isNotEmpty) {
+                  await db.update('sticker_packs', {'cover_local': localPath},
+                      where: 'id = ?', whereArgs: [id]);
+                }
+              }
+            }
+          }
+        }
+      },
     );
   }
 
@@ -73,10 +99,54 @@ class StorageService {
         conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
-  Future<List<StickerPack>> getAllPacks() async {
+  Future<List<StickerPack>> getAllPacks({String sortMode = 'updated'}) async {
     final db = await database;
-    final maps = await db.query('sticker_packs', orderBy: 'updated_at DESC');
-    return maps.map((m) => StickerPack.fromMap(m)).toList();
+    String orderBy;
+    switch (sortMode) {
+      case 'created':
+        orderBy = 'created_at DESC';
+        break;
+      case 'name':
+        orderBy = 'name COLLATE NOCASE ASC';
+        break;
+      case 'count':
+        orderBy = 'sticker_count DESC';
+        break;
+      case 'manual':
+        orderBy = 'sort_order ASC';
+        break;
+      default:
+        orderBy = 'updated_at DESC';
+    }
+    final maps = await db.query('sticker_packs', orderBy: orderBy);
+    final packs = maps.map((m) => StickerPack.fromMap(m)).toList();
+    // 自动修复没有封面或封面文件不存在的包
+    for (final pack in packs) {
+      if (pack.coverLocal == null || pack.coverLocal!.isEmpty || !File(pack.coverLocal!).existsSync()) {
+        final stickers = await db.query('stickers',
+            where: 'pack_id = ?', whereArgs: [pack.id],
+            orderBy: 'created_at', limit: 1);
+        if (stickers.isNotEmpty) {
+          final localPath = stickers.first['local_path'] as String?;
+          if (localPath != null && localPath.isNotEmpty) {
+            pack.coverLocal = localPath;
+            await db.update('sticker_packs', {'cover_local': localPath},
+                where: 'id = ?', whereArgs: [pack.id]);
+          }
+        }
+      }
+    }
+    return packs;
+  }
+
+  Future<void> updateSortOrders(Map<String, int> orders) async {
+    final db = await database;
+    final batch = db.batch();
+    orders.forEach((id, order) {
+      batch.update('sticker_packs', {'sort_order': order},
+          where: 'id = ?', whereArgs: [id]);
+    });
+    await batch.commit(noResult: true);
   }
 
   Future<StickerPack?> getPackById(String id) async {

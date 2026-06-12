@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
 import '../models/sticker_pack.dart';
 import '../services/storage_service.dart';
+import '../services/app_settings.dart';
 
 class PackProvider extends ChangeNotifier {
   final StorageService _storage;
@@ -9,12 +10,26 @@ class PackProvider extends ChangeNotifier {
   List<StickerPack> _packs = [];
   bool _isLoading = false;
   String? _error;
+  String _sortMode = 'updated';
 
   PackProvider(this._storage);
 
   List<StickerPack> get packs => _packs;
   bool get isLoading => _isLoading;
   String? get error => _error;
+  String get sortMode => _sortMode;
+
+  Future<void> loadSortMode() async {
+    _sortMode = await AppSettings.loadSortMode();
+    notifyListeners();
+  }
+
+  Future<void> setSortMode(String mode) async {
+    _sortMode = mode;
+    notifyListeners();
+    await AppSettings.saveSortMode(mode);
+    await loadPacks();
+  }
 
   Future<void> loadPacks() async {
     _isLoading = true;
@@ -22,7 +37,7 @@ class PackProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      _packs = await _storage.getAllPacks();
+      _packs = await _storage.getAllPacks(sortMode: _sortMode);
     } catch (e) {
       _error = e.toString();
     } finally {
@@ -58,5 +73,19 @@ class PackProvider extends ChangeNotifier {
         notifyListeners();
       }
     }
+  }
+
+  Future<void> reorderPacks(int oldIndex, int newIndex) async {
+    final pack = _packs.removeAt(oldIndex);
+    _packs.insert(newIndex, pack);
+    notifyListeners();
+    final orders = <String, int>{};
+    for (int i = 0; i < _packs.length; i++) {
+      orders[_packs[i].id] = i;
+    }
+    await _storage.updateSortOrders(orders);
+    _sortMode = 'manual';
+    notifyListeners();
+    await AppSettings.saveSortMode('manual');
   }
 }
