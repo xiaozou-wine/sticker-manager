@@ -111,7 +111,7 @@ class _PackDetailScreenState extends State<PackDetailScreen> {
         for (final f in files) {
           try { hashes.add(await _fileSha256(f)); } catch (_) {}
         }
-        await GallerySaveService.recordImportHashes(widget.pack.name, hashes);
+        await GallerySaveService.recordImportHashes(widget.pack.id, hashes);
       }
       final msg = '已添加 ${stickers.length} 个表情'
           '${skipped > 0 ? '，跳过 $skipped 个重复' : ''}';
@@ -410,7 +410,9 @@ class _PackDetailScreenState extends State<PackDetailScreen> {
         final sticker = provider.stickers[i];
         if (sticker.localPath == null) { failed++; continue; }
         try {
-          await Gal.putImage(sticker.localPath!, album: 'StickerApp/${widget.pack.name}');
+          final galPath = await GallerySaveService.prepareForGallery(File(sticker.localPath!));
+          await Gal.putImage(galPath, album: 'StickerApp/${widget.pack.name}');
+          await GallerySaveService.cleanupTemp(galPath);
           saved++;
         } catch (_) {
           failed++;

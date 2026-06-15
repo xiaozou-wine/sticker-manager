@@ -52,11 +52,7 @@ class StickerProvider extends ChangeNotifier {
       try {
         final bytes = await File(sticker.localPath!).readAsBytes();
         final hash = sha256.convert(bytes).toString();
-        // 获取 packName 用于 hash 文件名
-        final pack = await _storage.getPackById(packId);
-        if (pack != null) {
-          await GallerySaveService.removeHashes(pack.name, [hash]);
-        }
+        await GallerySaveService.removeHashes(packId, [hash]);
       } catch (_) {}
     }
     await _storage.deleteSticker(stickerId);
@@ -78,10 +74,7 @@ class StickerProvider extends ChangeNotifier {
       }
     }
     if (hashes.isNotEmpty) {
-      final pack = await _storage.getPackById(packId);
-      if (pack != null) {
-        await GallerySaveService.removeHashes(pack.name, hashes);
-      }
+      await GallerySaveService.removeHashes(packId, hashes);
     }
     await _storage.deleteStickers(ids);
     await _storage.updatePackStickerCount(packId);

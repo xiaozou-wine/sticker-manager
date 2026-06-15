@@ -222,6 +222,9 @@ class _ImportLinkScreenState extends State<ImportLinkScreen> {
           if (converted != null) {
             saveData = Uint8List.fromList(converted);
             ext = '.png';
+            debugPrint('WebP→PNG 转换成功: ${remote.id}');
+          } else {
+            debugPrint('WebP→PNG 转换失败，保留原始 WebP: ${remote.id}');
           }
         }
         final localPath = p.join(packDir.path, '${remote.id}$ext');
@@ -257,7 +260,7 @@ class _ImportLinkScreenState extends State<ImportLinkScreen> {
       await storage.updatePack(pack);
       // 导入时记录 hash，标记已保存到相册
       if (Platform.isAndroid) {
-        await GallerySaveService.recordImportHashes(pack.name, importedHashes, savedToGallery: true);
+        await GallerySaveService.recordImportHashes(pack.id, importedHashes, savedToGallery: true);
       }
     }
 

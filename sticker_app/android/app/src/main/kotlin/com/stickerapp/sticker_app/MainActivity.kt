@@ -1,9 +1,12 @@
 package com.stickerapp.sticker_app
 
 import android.content.ContentValues
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
+import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileInputStream
 import io.flutter.embedding.android.FlutterActivity

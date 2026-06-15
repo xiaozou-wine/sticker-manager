@@ -1,21 +1,22 @@
 import 'dart:io';
 import 'package:crypto/crypto.dart';
 import 'package:gal/gal.dart';
+import 'package:image/image.dart' as img;
 import 'package:path_provider/path_provider.dart';
 import 'package:photo_manager/photo_manager.dart';
 import 'storage_service.dart';
 
 class GallerySaveService {
-  /// 获取已保存 hash 记录文件路径
-  static Future<File> _hashFile(String packName) async {
+  /// 获取已保存 hash 记录文件路径（用 packId 避免重名/改名冲突）
+  static Future<File> _hashFile(String packId) async {
     final dir = await getApplicationDocumentsDirectory();
-    return File('${dir.path}/gallery_hashes_$packName.txt');
+    return File('${dir.path}/gallery_hashes_$packId.txt');
   }
 
   /// 格式: hash行 "hash:true"=已保存到相册, "hash:false"=已导入但未保存到相册
-  static Future<Map<String, bool>> _loadSavedHashes(String packName) async {
+  static Future<Map<String, bool>> _loadSavedHashes(String packId) async {
     try {
-      final file = await _hashFile(packName);
+      final file = await _hashFile(packId);
       if (!await file.exists()) return {};
       final lines = await file.readAsLines();
       final map = <String, bool>{};
@@ -35,38 +36,65 @@ class GallerySaveService {
     }
   }
 
-  static Future<void> _saveHashes(String packName, Map<String, bool> hashes) async {
-    final file = await _hashFile(packName);
+  static Future<void> _saveHashes(String packId, Map<String, bool> hashes) async {
+    final file = await _hashFile(packId);
     final lines = hashes.entries.map((e) => '${e.key}:${e.value}').toList();
     await file.writeAsString(lines.join('\n'));
   }
 
   /// 记录导入的 hash（import 时调用）
   /// [savedToGallery] 表示导入时是否已经调了 Gal.putImage
-  static Future<void> recordImportHashes(String packName, List<String> hashes, {bool savedToGallery = false}) async {
-    final existing = await _loadSavedHashes(packName);
+  static Future<void> recordImportHashes(String packId, List<String> hashes, {bool savedToGallery = false}) async {
+    final existing = await _loadSavedHashes(packId);
     for (final h in hashes) {
       existing[h] = savedToGallery;
     }
-    await _saveHashes(packName, existing);
+    await _saveHashes(packId, existing);
   }
 
   /// 删除本地 hash 记录
-  static Future<void> _clearHashes(String packName) async {
+  static Future<void> _clearHashes(String packId) async {
     try {
-      final file = await _hashFile(packName);
+      final file = await _hashFile(packId);
       if (await file.exists()) await file.delete();
     } catch (_) {}
   }
 
   /// 删除指定 hash 记录（删除表情时调用）
-  static Future<void> removeHashes(String packName, List<String> hashes) async {
+  static Future<void> removeHashes(String packId, List<String> hashes) async {
     try {
-      final existing = await _loadSavedHashes(packName);
+      final existing = await _loadSavedHashes(packId);
       for (final h in hashes) {
         existing.remove(h);
       }
-      await _saveHashes(packName, existing);
+      await _saveHashes(packId, existing);
+    } catch (_) {}
+  }
+
+  /// 准备相册用的文件：WebP 转 PNG，其他格式直接复制到临时目录
+  static Future<String> prepareForGallery(File file) async {
+    final tempDir = await Directory.systemTemp.createTemp('sticker_');
+    final ext = file.path.contains('.') ? '.${file.path.split('.').last}' : '';
+    final baseName = file.uri.pathSegments.last.replaceAll(RegExp(r'\.[^.]+$'), '');
+    if (ext.toLowerCase() == '.webp') {
+      final bytes = await file.readAsBytes();
+      final decoded = img.decodeImage(bytes);
+      if (decoded != null) {
+        final png = img.encodePng(decoded);
+        final outPath = '${tempDir.path}/$baseName.png';
+        await File(outPath).writeAsBytes(png);
+        return outPath;
+      }
+    }
+    // 非 WebP 或转换失败，直接复制
+    return (await file.copy('${tempDir.path}/$baseName$ext')).path;
+  }
+
+  static Future<void> cleanupTemp(String filePath) async {
+    try {
+      final file = File(filePath);
+      await file.delete();
+      await file.parent.delete();
     } catch (_) {}
   }
 
@@ -102,7 +130,7 @@ class GallerySaveService {
 
     // 覆盖模式：清空本地 hash + 删除相册文件
     if (mode == 'replace') {
-      await _clearHashes(name);
+      await _clearHashes(packId);
       try {
         final assets = await _getAlbumAssets(name);
         if (assets.isNotEmpty) {
@@ -112,7 +140,7 @@ class GallerySaveService {
     }
 
     // 加载 hash 记录（覆盖模式已清空，得到空 map）
-    final savedHashes = mode == 'replace' ? <String, bool>{} : await _loadSavedHashes(name);
+    final savedHashes = mode == 'replace' ? <String, bool>{} : await _loadSavedHashes(packId);
 
     int saved = 0;
     int skipped = 0;
@@ -129,25 +157,18 @@ class GallerySaveService {
 
         if (alreadySaved) {
           if (mode == 'rename') {
-            final tempDir = await Directory.systemTemp.createTemp('sticker_');
-            final ext = file.path.contains('.') ? '.${file.path.split('.').last}' : '';
-            final padded = (i + 1).toString().padLeft(3, '0');
-            final renamedFile = await file.copy('${tempDir.path}/${padded}_$ext');
-            await Gal.putImage(renamedFile.path, album: galAlbum);
-            try { await renamedFile.delete(); await tempDir.delete(); } catch (_) {}
+            final galPath = await prepareForGallery(file);
+            await Gal.putImage(galPath, album: galAlbum);
+            await cleanupTemp(galPath);
             savedHashes[hash] = true;
             saved++;
           } else {
             skipped++;
           }
         } else {
-          // 用零补位序号重命名，保证相册按名称排序正确
-          final tempDir = await Directory.systemTemp.createTemp('sticker_');
-          final ext = file.path.contains('.') ? '.${file.path.split('.').last}' : '';
-          final padded = (i + 1).toString().padLeft(3, '0');
-          final renamedFile = await file.copy('${tempDir.path}/${padded}_$ext');
-          await Gal.putImage(renamedFile.path, album: galAlbum);
-          try { await renamedFile.delete(); await tempDir.delete(); } catch (_) {}
+          final galPath = await prepareForGallery(file);
+          await Gal.putImage(galPath, album: galAlbum);
+          await cleanupTemp(galPath);
           savedHashes[hash] = true;
           saved++;
         }
@@ -158,7 +179,7 @@ class GallerySaveService {
     }
 
     // 保存更新后的 hash 记录
-    await _saveHashes(name, savedHashes);
+    await _saveHashes(packId, savedHashes);
 
     final debug = 'mode:$mode new:$saved skip:$skipped total_hash:${savedHashes.length}';
     return {'saved': saved, 'skipped': skipped, 'failed': failed, 'debug': debug};
