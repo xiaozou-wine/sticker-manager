@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:image/image.dart' as img;
 import 'package:provider/provider.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
@@ -199,15 +200,23 @@ class _ImportLinkScreenState extends State<ImportLinkScreen> {
         await api.downloadSticker(remote.fileUrl, tempPath);
         final encData = await File(tempPath).readAsBytes();
         final decData = CryptoService.decryptData(encData, link.key);
-        final ext = _guessExtension(decData);
+        var ext = _guessExtension(decData);
+        var saveData = decData;
+        if (ext == '.webp') {
+          final converted = _convertWebpToPng(decData);
+          if (converted != null) {
+            saveData = Uint8List.fromList(converted);
+            ext = '.png';
+          }
+        }
         final localPath = p.join(packDir.path, '${remote.id}$ext');
-        await File(localPath).writeAsBytes(decData);
+        await File(localPath).writeAsBytes(saveData);
         await File(tempPath).delete();
 
         stickers.add(Sticker(
           id: remote.id, packId: pack.id, type: remote.type,
           width: remote.width, height: remote.height,
-          sizeBytes: decData.length, extension: ext, localPath: localPath,
+          sizeBytes: saveData.length, extension: ext, localPath: localPath,
         ));
         if (mounted) setState(() { _downloadProgress = (i + 1) / remoteStickers.length; });
       } catch (e) { failedCount++; }
@@ -238,6 +247,16 @@ class _ImportLinkScreenState extends State<ImportLinkScreen> {
           data[8] == 0x57 && data[9] == 0x45 && data[10] == 0x42 && data[11] == 0x50) return '.webp';
     }
     return '.png';
+  }
+
+  List<int>? _convertWebpToPng(Uint8List webpData) {
+    try {
+      final decoded = img.decodeImage(webpData);
+      if (decoded == null) return null;
+      return img.encodePng(decoded);
+    } catch (_) {
+      return null;
+    }
   }
 
   @override
