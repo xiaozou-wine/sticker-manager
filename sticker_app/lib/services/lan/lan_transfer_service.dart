@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:image/image.dart' as img;
 import 'package:mime/mime.dart';
 import 'package:path/path.dart' as p;
@@ -18,11 +19,13 @@ typedef OnTransferProgress = void Function(double progress);
 typedef OnTransferComplete = void Function(String packName, int receivedCount);
 
 class LanTransferService {
-  static const int _port = 53320;
+  static const int _defaultPort = 58320;
+  static const int _maxFallbackTries = 10;
   // 上传 token 有效期（秒），/send 被接受后生成，超时失效
   static const int _tokenTtlSeconds = 60;
 
   HttpServer? _server;
+  int _actualPort = _defaultPort;
   final StorageService storageService;
   final OnTransferRequest onRequestReceived;
   final OnTransferComplete? onTransferComplete;
@@ -41,9 +44,11 @@ class LanTransferService {
   });
 
   bool get isRunning => _server != null;
+  /// 实际绑定的端口号，供发现服务广播
+  int get port => _actualPort;
 
   /// Ping 检测目标设备是否在线（静态方法，不需要实例）
-  static Future<bool> pingDevice(String ip, {int port = _port}) async {
+  static Future<bool> pingDevice(String ip, {int port = _defaultPort}) async {
     try {
       final dio = Dio(BaseOptions(connectTimeout: const Duration(seconds: 3), receiveTimeout: const Duration(seconds: 3)));
       final resp = await dio.get('http://$ip:$port/api/sticker/ping');
@@ -55,8 +60,20 @@ class LanTransferService {
 
   Future<void> start() async {
     if (_server != null) return;
-    _server = await HttpServer.bind(InternetAddress.anyIPv4, _port, shared: true);
-    _server!.listen(_handleRequest);
+    // 尝试默认端口，失败则依次尝试 +1
+    for (int i = 0; i < _maxFallbackTries; i++) {
+      final tryPort = _defaultPort + i;
+      try {
+        _server = await HttpServer.bind(InternetAddress.anyIPv4, tryPort, shared: true);
+        _server!.listen(_handleRequest);
+        _actualPort = tryPort;
+        if (i > 0) debugPrint('[LAN] Bound to fallback port $tryPort');
+        return;
+      } catch (e) {
+        debugPrint('[LAN] Port $tryPort unavailable: $e');
+      }
+    }
+    throw Exception('端口 $_defaultPort~${_defaultPort + _maxFallbackTries - 1} 均被占用');
   }
 
   void stop() {

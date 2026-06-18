@@ -32,6 +32,8 @@ void main() async {
   await windowManager.waitUntilReadyToShow(windowOptions);
   await windowManager.show();
   await windowManager.focus();
+  // 拦截关闭按钮，点 X 直接退出而不是缩到托盘
+  await windowManager.setPreventClose(true);
 
   runApp(MyApp(storage: storage));
 
@@ -91,13 +93,29 @@ class MyApp extends StatefulWidget {
   State<MyApp> createState() => _MyAppState();
 }
 
-class _MyAppState extends State<MyApp> {
+class _MyAppState extends State<MyApp> with WindowListener {
   final _navigatorKey = GlobalKey<NavigatorState>();
 
   @override
   void initState() {
     super.initState();
+    windowManager.addListener(this);
     _initDeepLinks();
+  }
+
+  @override
+  void dispose() {
+    windowManager.removeListener(this);
+    hotKeyManager.unregisterAll();
+    super.dispose();
+  }
+
+  /// 点 X 按钮直接退出应用
+  @override
+  void onWindowClose() async {
+    await hotKeyManager.unregisterAll();
+    await trayManager.destroy();
+    exit(0);
   }
 
   void _initDeepLinks() {
@@ -129,12 +147,6 @@ class _MyAppState extends State<MyApp> {
         );
       });
     }
-  }
-
-  @override
-  void dispose() {
-    hotKeyManager.unregisterAll();
-    super.dispose();
   }
 
   @override

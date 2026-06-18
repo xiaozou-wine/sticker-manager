@@ -17,6 +17,7 @@ class LanDiscoveryService extends ChangeNotifier {
   final String alias;
   final String deviceModel;
   final String deviceType;
+  int transferPort;
 
   RawDatagramSocket? _socket;
   Timer? _broadcastTimer;
@@ -42,6 +43,7 @@ class LanDiscoveryService extends ChangeNotifier {
     required this.alias,
     required this.deviceModel,
     required this.deviceType,
+    this.transferPort = 58320,
   });
 
   List<LanDevice> get devices => _devices.values.toList();
@@ -167,7 +169,7 @@ class LanDiscoveryService extends ChangeNotifier {
   List<int> _buildDto() {
     return utf8.encode(jsonEncode({
       'alias': alias, 'deviceModel': deviceModel, 'deviceType': deviceType,
-      'fingerprint': fingerprint, 'port': 53320,
+      'fingerprint': fingerprint, 'port': transferPort,
       'appName': 'StickerApp', 'version': '1.0',
     }));
   }

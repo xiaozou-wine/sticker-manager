@@ -69,6 +69,8 @@ class _LanDiscoverScreenState extends State<LanDiscoverScreen> with SingleTicker
     try {
       await _transfer!.start();
       _transferStarted = true;
+      // 广播实际绑定的端口（可能是备用端口）
+      _discovery?.transferPort = _transfer!.port;
     } catch (e) {
       debugPrint('[LAN] Transfer service start failed: $e');
       _transferStarted = false;

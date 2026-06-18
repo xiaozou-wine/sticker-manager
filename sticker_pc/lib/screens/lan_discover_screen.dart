@@ -72,6 +72,8 @@ class _LanDiscoverScreenState extends State<LanDiscoverScreen> with SingleTicker
     try {
       await _transfer!.start();
       _transferStarted = true;
+      // 广播实际绑定的端口（可能是备用端口）
+      _discovery?.transferPort = _transfer!.port;
     } catch (e) {
       debugPrint('[LAN] Transfer service start failed: $e');
       _transferStarted = false;
@@ -105,20 +107,32 @@ class _LanDiscoverScreenState extends State<LanDiscoverScreen> with SingleTicker
               SelectableText('错误: $_transferError',
                   style: const TextStyle(fontSize: 12, color: Colors.grey)),
               const SizedBox(height: 16),
-              const Text('可能原因及解决方法：', style: TextStyle(fontWeight: FontWeight.bold)),
-              const SizedBox(height: 12),
-              const Text('1. 端口被占用（最常见）'),
+              // 原因 1：端口被占用
+              const Text('① 端口被占用（最常见）', style: TextStyle(fontWeight: FontWeight.bold)),
               const SizedBox(height: 4),
-              _buildCopyableCommand('netstat -ano | findstr 53320', '查占用进程'),
-              const SizedBox(height: 12),
-              const Text('2. 防火墙阻止入站'),
+              const Text('按 Win 键搜索"PowerShell"，打开后执行：'),
+              const SizedBox(height: 4),
+              _buildCopyableCommand('netstat -ano | findstr 58320'),
+              const SizedBox(height: 4),
+              const Text('如果看到 LISTENING 行，记下最后的 PID 数字，然后执行：'),
+              const SizedBox(height: 4),
+              _buildCopyableCommand('taskkill /PID <PID数字> /F'),
+              const SizedBox(height: 4),
+              const Text('或直接关闭所有 Sticker Manager 窗口后重试。'),
+              const SizedBox(height: 16),
+              // 原因 2：防火墙
+              const Text('② 防火墙阻止入站连接', style: TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 4),
+              const Text('右键开始菜单 → Windows PowerShell(管理员)，执行：'),
               const SizedBox(height: 4),
               _buildCopyableCommand(
                 'netsh advfirewall firewall add rule name="Sticker Manager LAN Transfer" dir=in action=allow protocol=TCP localport=53320',
-                '添加防火墙规则（管理员）',
               ),
-              const SizedBox(height: 12),
-              const Text('3. 权限不足 → 以管理员身份运行应用'),
+              const SizedBox(height: 16),
+              // 原因 3：权限
+              const Text('③ 权限不足', style: TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 4),
+              const Text('右键应用图标 → 以管理员身份运行'),
             ],
           ),
         ),
@@ -140,7 +154,7 @@ class _LanDiscoverScreenState extends State<LanDiscoverScreen> with SingleTicker
   }
 
   /// 构建可复制的命令行块
-  Widget _buildCopyableCommand(String command, String label) {
+  Widget _buildCopyableCommand(String command) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
@@ -156,6 +170,9 @@ class _LanDiscoverScreenState extends State<LanDiscoverScreen> with SingleTicker
         InkWell(
           onTap: () {
             Clipboard.setData(ClipboardData(text: command));
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('已复制到剪贴板'), duration: Duration(seconds: 1)),
+            );
           },
           child: Tooltip(
             message: '复制',

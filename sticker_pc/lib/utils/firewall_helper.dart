@@ -2,10 +2,10 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 
 /// Windows 防火墙入站规则辅助工具
-/// 为局域网互传的 HTTP 端口（53320）添加入站放行规则
+/// 为局域网互传的 HTTP 端口（58320-58329）添加入站放行规则
 class FirewallHelper {
   static const _ruleName = 'Sticker Manager LAN Transfer';
-  static const _port = 53320;
+  static const _portRange = '58320-58329';
 
   /// 检查并尝试添加防火墙入站规则
   /// 返回 [FirewallResult] 描述结果
@@ -39,7 +39,7 @@ class FirewallHelper {
           'dir=in',
           'action=allow',
           'protocol=TCP',
-          'localport=$_port',
+          'localport=$_portRange',
         ],
         runInShell: true,
       );
@@ -59,14 +59,14 @@ class FirewallHelper {
 
   /// 手动添加防火墙规则的说明文本
   static const String manualInstructions = '''
-局域网互传需要允许 TCP 端口 $_port 的入站连接。
+局域网互传需要允许 TCP 端口 $_portRange 的入站连接。
 
 手动设置步骤：
 1. 按 Win 键，搜索"防火墙"，打开"Windows Defender 防火墙"
 2. 点击左侧"高级设置"
 3. 左侧选择"入站规则" → 右侧点击"新建规则"
 4. 选择"端口" → 下一步
-5. 选择"TCP"，输入端口 $_port → 下一步
+5. 选择"TCP"，输入端口 $_portRange → 下一步
 6. 选择"允许连接" → 下一步
 7. 勾选所有网络类型 → 下一步
 8. 名称填写：$_ruleName → 完成''';
