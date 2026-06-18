@@ -3,7 +3,12 @@ server/static/stickers/
 server/sticker-server.exe
 sticker_app/build/
 sticker_app/.dart_tool/
+sticker_pc/build/
+.dart_tool/
+docs/
 *.lock
+*.db
+*.zip
 
 
 server/sticker-server-*
