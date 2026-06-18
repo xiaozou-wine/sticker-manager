@@ -41,7 +41,7 @@ class LanDiscoveryService extends ChangeNotifier {
     required this.alias,
     required this.deviceModel,
     required this.deviceType,
-    this.transferPort = 58320,
+    this.transferPort = 28320,
   });
 
   List<LanDevice> get devices => _devices.values.toList();

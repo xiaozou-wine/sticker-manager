@@ -19,7 +19,7 @@ typedef OnTransferProgress = void Function(double progress);
 typedef OnTransferComplete = void Function(String packName, int receivedCount);
 
 class LanTransferService {
-  static const int _defaultPort = 58320;
+  static const int _defaultPort = 28320;
   static const int _maxFallbackTries = 10;
   // 上传 token 有效期（秒），/send 被接受后生成，超时失效
   static const int _tokenTtlSeconds = 60;

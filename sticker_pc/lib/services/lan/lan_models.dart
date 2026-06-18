@@ -17,7 +17,7 @@ class LanDevice {
     DateTime? lastSeen,
   }) : lastSeen = lastSeen ?? DateTime.now();
 
-  bool get isExpired => DateTime.now().difference(lastSeen).inSeconds > 15;
+  bool get isExpired => DateTime.now().difference(lastSeen).inSeconds > 30;
 
   factory LanDevice.fromJson(Map<String, dynamic> json, String ip) {
     return LanDevice(

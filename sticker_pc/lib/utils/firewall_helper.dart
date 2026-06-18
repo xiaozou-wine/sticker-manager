@@ -5,7 +5,7 @@ import 'package:flutter/foundation.dart';
 /// 为局域网互传的 HTTP 端口（58320-58329）添加入站放行规则
 class FirewallHelper {
   static const _ruleName = 'Sticker Manager LAN Transfer';
-  static const _portRange = '58320-58329';
+  static const _portRange = '28320-28329';
 
   /// 检查并尝试添加防火墙入站规则
   /// 返回 [FirewallResult] 描述结果

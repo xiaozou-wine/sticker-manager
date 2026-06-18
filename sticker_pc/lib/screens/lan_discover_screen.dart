@@ -112,7 +112,7 @@ class _LanDiscoverScreenState extends State<LanDiscoverScreen> with SingleTicker
               const SizedBox(height: 4),
               const Text('按 Win 键搜索"PowerShell"，打开后执行：'),
               const SizedBox(height: 4),
-              _buildCopyableCommand('netstat -ano | findstr 58320'),
+              _buildCopyableCommand('netstat -ano | findstr 28320'),
               const SizedBox(height: 4),
               const Text('如果看到 LISTENING 行，记下最后的 PID 数字，然后执行：'),
               const SizedBox(height: 4),
