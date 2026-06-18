@@ -9,6 +9,7 @@ import 'album_picker_screen.dart';
 import 'pack_detail_screen.dart';
 import 'import_link_screen.dart';
 import 'share_pack_screen.dart';
+import 'lan_discover_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   final List<File>? sharedFiles;
@@ -37,6 +38,17 @@ class _HomeScreenState extends State<HomeScreen> {
         title: const Text('表情包管理'),
         centerTitle: true,
         actions: [
+          IconButton(
+            icon: const Icon(Icons.wifi_find),
+            tooltip: '局域网传输',
+            onPressed: () {
+              final provider = context.read<PackProvider>();
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const LanDiscoverScreen()),
+              ).then((_) => provider.loadPacks());
+            },
+          ),
           _buildSortButton(),
         ],
       ),
@@ -144,6 +156,16 @@ class _HomeScreenState extends State<HomeScreen> {
             leading: const Icon(Icons.link),
             title: const Text('从链接导入'),
             onTap: () { Navigator.pop(context); _importFromLink(homeContext); },
+          ),
+          ListTile(
+            leading: const Icon(Icons.wifi_find),
+            title: const Text('局域网传输'),
+            onTap: () {
+              Navigator.pop(context);
+              final provider = homeContext.read<PackProvider>();
+              Navigator.push(homeContext, MaterialPageRoute(builder: (_) => const LanDiscoverScreen()))
+                  .then((_) => provider.loadPacks());
+            },
           ),
         ]),
       ),

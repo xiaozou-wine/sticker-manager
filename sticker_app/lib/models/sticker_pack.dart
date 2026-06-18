@@ -45,6 +45,10 @@ class StickerPack {
     };
   }
 
+  Map<String, dynamic> toJson() => {
+    'id': id, 'name': name, 'description': description, 'stickerCount': stickerCount,
+  };
+
   factory StickerPack.fromMap(Map<String, dynamic> map) {
     return StickerPack(
       id: map['id'],

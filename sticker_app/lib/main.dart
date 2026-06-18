@@ -8,6 +8,7 @@ import 'providers/pack_provider.dart';
 import 'providers/sticker_provider.dart';
 import 'screens/home_screen.dart';
 import 'screens/import_link_screen.dart';
+import 'screens/lan_discover_screen.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -79,6 +80,12 @@ class _MyAppState extends State<MyApp> {
           MaterialPageRoute(
             builder: (_) => ImportLinkScreen(initialLink: link),
           ),
+        );
+      });
+    } else if (link.startsWith('sticker://lan/')) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _navigatorKey.currentState?.push(
+          MaterialPageRoute(builder: (_) => const LanDiscoverScreen()),
         );
       });
     }

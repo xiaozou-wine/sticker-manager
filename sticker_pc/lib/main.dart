@@ -13,6 +13,7 @@ import 'providers/pack_provider.dart';
 import 'providers/sticker_provider.dart';
 import 'screens/home_screen.dart';
 import 'screens/import_link_screen.dart';
+import 'screens/lan_discover_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -40,7 +41,7 @@ void main() async {
 }
 
 Future<void> _initTray() async {
-  await trayManager.setIcon('windows/runner/resources/app_icon.ico');
+  await trayManager.setIcon('assets/images/tray_icon.ico');
   await trayManager.setContextMenu(
     Menu(items: [
       MenuItem(key: 'show', label: '显示/隐藏'),
@@ -119,6 +120,12 @@ class _MyAppState extends State<MyApp> {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _navigatorKey.currentState?.push(
           MaterialPageRoute(builder: (_) => ImportLinkScreen(initialLink: link)),
+        );
+      });
+    } else if (link.startsWith('sticker://lan/')) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _navigatorKey.currentState?.push(
+          MaterialPageRoute(builder: (_) => const LanDiscoverScreen()),
         );
       });
     }

@@ -1,7 +1,7 @@
 name: sticker_pc
 description: "Sticker Manager PC - desktop sticker picker with clipboard copy"
 publish_to: 'none'
-version: 1.1.10+3
+version: 1.2.0+4
 
 environment:
   sdk: ^3.12.1
@@ -26,11 +26,21 @@ dependencies:
   tray_manager: ^0.5.0
   window_manager: ^0.4.0
   image: ^4.5.2
+  mime: ^2.0.0
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.14.0
+
+flutter_launcher_icons:
+  windows:
+    generate: true
+    image_path: "icon_source.png"
+    icon_size: 48
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/images/

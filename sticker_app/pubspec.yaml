@@ -1,7 +1,7 @@
 name: sticker_app
 description: A sticker pack manager app
 publish_to: 'none'
-version: 1.1.11+13
+version: 1.2.0+14
 
 environment:
   sdk: '>=3.0.0 <4.0.0'
@@ -26,11 +26,20 @@ dependencies:
   gal: ^2.3.2
   receive_sharing_intent: ^1.8.0
   image: ^4.5.2
+  mime: ^2.0.0
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^3.0.1
+  flutter_launcher_icons: ^0.14.0
+
+flutter_launcher_icons:
+  android: true
+  ios: false
+  image_path: "icon_source.png"
+  adaptive_icon_background: "#FFFFFF"
+  adaptive_icon_foreground: "icon_source.png"
 
 flutter:
   uses-material-design: true

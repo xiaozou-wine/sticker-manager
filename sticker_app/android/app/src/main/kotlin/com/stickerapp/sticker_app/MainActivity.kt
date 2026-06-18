@@ -12,10 +12,13 @@ import java.io.FileInputStream
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
+import android.net.wifi.WifiManager
 
 class MainActivity : FlutterActivity() {
 
     private val CHANNEL = "com.stickerapp/sticker_accessibility"
+    private val LAN_CHANNEL = "com.stickerapp/lan"
+    private var multicastLock: WifiManager.MulticastLock? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -51,6 +54,34 @@ class MainActivity : FlutterActivity() {
                         result.success(duplicates)
                     } catch (e: Exception) {
                         result.error("CHECK_FAILED", e.message, null)
+                    }
+                }
+                else -> result.notImplemented()
+            }
+        }
+
+        // LAN Multicast Lock channel
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, LAN_CHANNEL).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "acquireMulticastLock" -> {
+                    try {
+                        val wifi = applicationContext.getSystemService(WIFI_SERVICE) as WifiManager
+                        multicastLock = wifi.createMulticastLock("StickerAppLan").apply {
+                            setReferenceCounted(true)
+                            acquire()
+                        }
+                        result.success(true)
+                    } catch (e: Exception) {
+                        result.error("LOCK_FAILED", e.message, null)
+                    }
+                }
+                "releaseMulticastLock" -> {
+                    try {
+                        multicastLock?.release()
+                        multicastLock = null
+                        result.success(true)
+                    } catch (e: Exception) {
+                        result.error("RELEASE_FAILED", e.message, null)
                     }
                 }
                 else -> result.notImplemented()
