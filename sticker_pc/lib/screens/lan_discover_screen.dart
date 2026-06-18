@@ -23,6 +23,7 @@ class _LanDiscoverScreenState extends State<LanDiscoverScreen> with SingleTicker
   double _sendProgress = 0;
   String _localIp = '获取中...';
   bool _transferStarted = false;
+  String _transferError = '';
   late AnimationController _pulseController;
 
   @override
@@ -73,15 +74,89 @@ class _LanDiscoverScreenState extends State<LanDiscoverScreen> with SingleTicker
     } catch (e) {
       debugPrint('[LAN] Transfer service start failed: $e');
       _transferStarted = false;
+      _transferError = e.toString();
     }
     if (mounted) setState(() {});
 
-    // transfer service 启动成功后，检查防火墙入站规则
+    if (_transferStarted && mounted) {
+      // 传输服务启动成功，检查防火墙入站规则
+      final fwResult = await FirewallHelper.ensureRule();
+      if (!fwResult.ok && mounted) {
+        _showFirewallDialog();
+      }
+    } else if (!_transferStarted && mounted) {
+      // 传输服务启动失败，提示排查步骤
+      _showTransferFailedDialog();
+    }
+  }
+
+  /// 传输服务启动失败时，弹窗提示排查步骤
+  void _showTransferFailedDialog() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('传输服务启动失败'),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('错误: $_transferError', style: const TextStyle(fontSize: 12, color: Colors.grey)),
+              const SizedBox(height: 16),
+              const Text('可能原因及解决方法：', style: TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              const Text('1. 端口 53320 被占用\n'
+                  '   → 关闭其他正在运行的本应用实例\n'
+                  '   → 或在命令行执行: netstat -ano | findstr 53320\n'
+                  '     找到占用进程并关闭'),
+              const SizedBox(height: 8),
+              const Text('2. 防火墙阻止\n'
+                  '   → 以管理员身份运行 PowerShell，执行:\n'
+                  '   netsh advfirewall firewall add rule\n'
+                  '     name="Sticker Manager LAN Transfer"\n'
+                  '     dir=in action=allow protocol=TCP localport=53320'),
+              const SizedBox(height: 8),
+              const Text('3. 权限不足\n'
+                  '   → 尝试以管理员身份运行应用'),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('关闭'),
+          ),
+          FilledButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              _retryTransfer();
+            },
+            child: const Text('重试'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 重试启动传输服务
+  Future<void> _retryTransfer() async {
+    try {
+      await _transfer!.start();
+      _transferStarted = true;
+      _transferError = '';
+    } catch (e) {
+      _transferStarted = false;
+      _transferError = e.toString();
+    }
+    if (mounted) setState(() {});
+
     if (_transferStarted && mounted) {
       final fwResult = await FirewallHelper.ensureRule();
       if (!fwResult.ok && mounted) {
         _showFirewallDialog();
       }
+    } else if (!_transferStarted && mounted) {
+      _showTransferFailedDialog();
     }
   }
 
@@ -201,12 +276,16 @@ class _LanDiscoverScreenState extends State<LanDiscoverScreen> with SingleTicker
               Text(_localIp, style: TextStyle(fontSize: 13, color: Colors.white.withOpacity(0.8))),
               if (!transferOk && isOnline) ...[
                 const SizedBox(height: 4),
-                Row(children: [
-                  Icon(Icons.warning_amber_rounded, size: 14, color: Colors.yellow.shade200),
-                  const SizedBox(width: 4),
-                  Expanded(child: Text('传输服务未启动，无法接收文件',
-                    style: TextStyle(fontSize: 11, color: Colors.yellow.shade200))),
-                ]),
+                GestureDetector(
+                  onTap: _showTransferFailedDialog,
+                  child: Row(children: [
+                    Icon(Icons.warning_amber_rounded, size: 14, color: Colors.yellow.shade200),
+                    const SizedBox(width: 4),
+                    Expanded(child: Text('传输服务未启动，点击查看解决方法',
+                      style: TextStyle(fontSize: 11, color: Colors.yellow.shade200,
+                        decoration: TextDecoration.underline))),
+                  ]),
+                ),
               ],
             ],
           ),
