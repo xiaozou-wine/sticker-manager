@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
 import '../services/lan/lan_models.dart';
@@ -101,23 +102,23 @@ class _LanDiscoverScreenState extends State<LanDiscoverScreen> with SingleTicker
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text('错误: $_transferError', style: const TextStyle(fontSize: 12, color: Colors.grey)),
+              SelectableText('错误: $_transferError',
+                  style: const TextStyle(fontSize: 12, color: Colors.grey)),
               const SizedBox(height: 16),
               const Text('可能原因及解决方法：', style: TextStyle(fontWeight: FontWeight.bold)),
-              const SizedBox(height: 8),
-              const Text('1. 端口 53320 被占用\n'
-                  '   → 关闭其他正在运行的本应用实例\n'
-                  '   → 或在命令行执行: netstat -ano | findstr 53320\n'
-                  '     找到占用进程并关闭'),
-              const SizedBox(height: 8),
-              const Text('2. 防火墙阻止\n'
-                  '   → 以管理员身份运行 PowerShell，执行:\n'
-                  '   netsh advfirewall firewall add rule\n'
-                  '     name="Sticker Manager LAN Transfer"\n'
-                  '     dir=in action=allow protocol=TCP localport=53320'),
-              const SizedBox(height: 8),
-              const Text('3. 权限不足\n'
-                  '   → 尝试以管理员身份运行应用'),
+              const SizedBox(height: 12),
+              const Text('1. 端口被占用（最常见）'),
+              const SizedBox(height: 4),
+              _buildCopyableCommand('netstat -ano | findstr 53320', '查占用进程'),
+              const SizedBox(height: 12),
+              const Text('2. 防火墙阻止入站'),
+              const SizedBox(height: 4),
+              _buildCopyableCommand(
+                'netsh advfirewall firewall add rule name="Sticker Manager LAN Transfer" dir=in action=allow protocol=TCP localport=53320',
+                '添加防火墙规则（管理员）',
+              ),
+              const SizedBox(height: 12),
+              const Text('3. 权限不足 → 以管理员身份运行应用'),
             ],
           ),
         ),
@@ -135,6 +136,33 @@ class _LanDiscoverScreenState extends State<LanDiscoverScreen> with SingleTicker
           ),
         ],
       ),
+    );
+  }
+
+  /// 构建可复制的命令行块
+  Widget _buildCopyableCommand(String command, String label) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade100,
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: Colors.grey.shade300),
+      ),
+      child: Row(children: [
+        Expanded(
+          child: SelectableText(command, style: const TextStyle(fontSize: 12, fontFamily: 'monospace')),
+        ),
+        const SizedBox(width: 8),
+        InkWell(
+          onTap: () {
+            Clipboard.setData(ClipboardData(text: command));
+          },
+          child: Tooltip(
+            message: '复制',
+            child: Icon(Icons.copy, size: 16, color: Colors.grey.shade600),
+          ),
+        ),
+      ]),
     );
   }
 

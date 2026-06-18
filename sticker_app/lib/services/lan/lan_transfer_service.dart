@@ -55,7 +55,7 @@ class LanTransferService {
 
   Future<void> start() async {
     if (_server != null) return;
-    _server = await HttpServer.bind(InternetAddress.anyIPv4, _port);
+    _server = await HttpServer.bind(InternetAddress.anyIPv4, _port, shared: true);
     _server!.listen(_handleRequest);
   }
 

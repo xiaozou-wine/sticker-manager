@@ -56,7 +56,7 @@ class LanTransferService {
   Future<void> start() async {
     if (_server != null) return;
     try {
-      _server = await HttpServer.bind(InternetAddress.anyIPv4, _port);
+      _server = await HttpServer.bind(InternetAddress.anyIPv4, _port, shared: true);
       _server!.listen(_handleRequest);
     } catch (e) {
       debugPrint('[LAN] Transfer service failed to bind port $_port: $e');
