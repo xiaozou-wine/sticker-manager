@@ -20,6 +20,7 @@ class LanDiscoveryService extends ChangeNotifier {
   Timer? _broadcastTimer;
   Timer? _cleanupTimer;
   bool _isRunning = false;
+  bool _cleanupPaused = false;
   final Map<String, LanDevice> _devices = {};
   int broadcastCount = 0;
   int receiveCount = 0;
@@ -176,7 +177,15 @@ class LanDiscoveryService extends ChangeNotifier {
     }
   }
 
+  /// 发送期间暂停清理，防止设备列表被过期移除
+  void pauseCleanup() => _cleanupPaused = true;
+  void resumeCleanup() => _cleanupPaused = false;
+
+  /// 立即发送一次公告，用于发送完成后刷新设备列表
+  void sendAnnouncement() => _sendMulticast();
+
   void _cleanup() {
+    if (_cleanupPaused) return;
     final before = _devices.length;
     _devices.removeWhere((_, d) => d.isExpired);
     if (_devices.length != before) notifyListeners();

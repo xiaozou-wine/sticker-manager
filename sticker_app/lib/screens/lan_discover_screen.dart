@@ -21,6 +21,7 @@ class _LanDiscoverScreenState extends State<LanDiscoverScreen> with SingleTicker
   bool _isSending = false;
   double _sendProgress = 0;
   String _localIp = '获取中...';
+  bool _transferStarted = false;
   late AnimationController _pulseController;
 
   @override
@@ -67,8 +68,10 @@ class _LanDiscoverScreenState extends State<LanDiscoverScreen> with SingleTicker
     await _discovery!.start();
     try {
       await _transfer!.start();
+      _transferStarted = true;
     } catch (e) {
       debugPrint('[LAN] Transfer service start failed: $e');
+      _transferStarted = false;
     }
     if (mounted) setState(() {});
   }
@@ -122,6 +125,7 @@ class _LanDiscoverScreenState extends State<LanDiscoverScreen> with SingleTicker
 
   Widget _buildDeviceInfo() {
     final isOnline = _discovery?.isRunning == true;
+    final transferOk = _transferStarted;
     return Container(
       margin: const EdgeInsets.all(16),
       padding: const EdgeInsets.all(20),
@@ -148,26 +152,56 @@ class _LanDiscoverScreenState extends State<LanDiscoverScreen> with SingleTicker
               Text(_discovery?.alias ?? '初始化中...',
                   style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600, color: Colors.white)),
               const SizedBox(height: 4),
-              Text('$_localIp', style: TextStyle(fontSize: 13, color: Colors.white.withOpacity(0.8))),
+              Text(_localIp, style: TextStyle(fontSize: 13, color: Colors.white.withOpacity(0.8))),
+              if (!transferOk && isOnline) ...[
+                const SizedBox(height: 4),
+                Row(children: [
+                  Icon(Icons.warning_amber_rounded, size: 14, color: Colors.yellow.shade200),
+                  const SizedBox(width: 4),
+                  Expanded(child: Text('传输服务未启动，无法接收文件',
+                    style: TextStyle(fontSize: 11, color: Colors.yellow.shade200))),
+                ]),
+              ],
             ],
           ),
         ),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-          decoration: BoxDecoration(
-            color: Colors.white.withOpacity(isOnline ? 0.25 : 0.15),
-            borderRadius: BorderRadius.circular(20),
-          ),
-          child: Row(mainAxisSize: MainAxisSize.min, children: [
-            Container(width: 8, height: 8,
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
               decoration: BoxDecoration(
-                color: isOnline ? Colors.greenAccent : Colors.grey,
-                shape: BoxShape.circle,
-              )),
-            const SizedBox(width: 6),
-            Text(isOnline ? '在线' : '离线',
-                style: TextStyle(fontSize: 12, color: isOnline ? Colors.white : Colors.white70)),
-          ]),
+                color: Colors.white.withOpacity(isOnline ? 0.25 : 0.15),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                Container(width: 8, height: 8,
+                  decoration: BoxDecoration(
+                    color: isOnline ? Colors.greenAccent : Colors.grey,
+                    shape: BoxShape.circle,
+                  )),
+                const SizedBox(width: 6),
+                Text(isOnline ? '在线' : '离线',
+                    style: TextStyle(fontSize: 12, color: isOnline ? Colors.white : Colors.white70)),
+              ]),
+            ),
+            if (transferOk) ...[
+              const SizedBox(height: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  Container(width: 8, height: 8,
+                    decoration: const BoxDecoration(color: Colors.greenAccent, shape: BoxShape.circle)),
+                  const SizedBox(width: 6),
+                  const Text('可传输', style: TextStyle(fontSize: 12, color: Colors.white)),
+                ]),
+              ),
+            ],
+          ],
         ),
       ]),
     );
@@ -351,58 +385,120 @@ class _LanDiscoverScreenState extends State<LanDiscoverScreen> with SingleTicker
     );
   }
 
-  // 选择表情包并发送给目标设备
+  // 选择多个表情包并依次发送给目标设备
   Future<void> _selectPackAndSend(LanDevice device) async {
     final storage = context.read<StorageService>();
     final packs = await storage.getAllPacks();
     if (!mounted || packs.isEmpty) return;
 
-    final selected = await showDialog<dynamic>(
+    final selected = await showDialog<List<dynamic>>(
       context: context,
-      builder: (ctx) => SimpleDialog(
-        title: const Text('选择要发送的表情包'),
-        children: packs.map((pack) => SimpleDialogOption(
-          onPressed: () => Navigator.pop(ctx, pack),
-          child: ListTile(
-            contentPadding: EdgeInsets.zero,
-            title: Text(pack.name),
-            subtitle: Text('${pack.stickerCount} 个表情'),
-          ),
-        )).toList(),
-      ),
+      builder: (ctx) => _MultiPackSelectDialog(packs: packs),
     );
 
-    if (selected == null || !mounted) return;
+    if (selected == null || selected.isEmpty || !mounted) return;
 
     setState(() { _isSending = true; _sendProgress = 0; });
+    // 暂停设备清理，防止长时间上传导致设备过期消失
+    _discovery?.pauseCleanup();
 
+    int totalSent = 0;
+    int failedPacks = 0;
     try {
-      final result = await _transfer!.sendPack(
-        device: device,
-        pack: selected,
-        onProgress: (p) {
-          if (mounted) setState(() => _sendProgress = p);
-        },
-      );
+      for (int i = 0; i < selected.length; i++) {
+        if (!mounted) break;
+        final pack = selected[i];
+        setState(() => _sendProgress = i / selected.length);
+        try {
+          final result = await _transfer!.sendPack(
+            device: device,
+            pack: pack,
+            onProgress: (p) {
+              if (mounted) setState(() => _sendProgress = (i + p) / selected.length);
+            },
+          );
+          if (result.success) {
+            totalSent += result.receivedCount;
+          } else {
+            failedPacks++;
+          }
+        } catch (e) {
+          failedPacks++;
+          debugPrint('[LAN] Send pack "${pack.name}" failed: $e');
+        }
+      }
 
       if (!mounted) return;
-      if (result.success) {
+      if (failedPacks == 0) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('发送成功，${result.receivedCount} 个表情')),
+          SnackBar(content: Text('发送完成，共 $totalSent 个表情')),
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('发送被拒绝或失败')),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('发送失败: $e')),
+          SnackBar(content: Text('发送完成，$totalSent 个成功，$failedPacks 个包失败')),
         );
       }
     } finally {
+      _discovery?.resumeCleanup();
+      _discovery?.sendAnnouncement();
       if (mounted) setState(() { _isSending = false; });
     }
+  }
+}
+
+/// 多选表情包弹窗
+class _MultiPackSelectDialog extends StatefulWidget {
+  final List<dynamic> packs;
+  const _MultiPackSelectDialog({required this.packs});
+
+  @override
+  State<_MultiPackSelectDialog> createState() => _MultiPackSelectDialogState();
+}
+
+class _MultiPackSelectDialogState extends State<_MultiPackSelectDialog> {
+  final Set<int> _selected = {};
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('选择要发送的表情包'),
+      content: SizedBox(
+        width: double.maxFinite,
+        child: ListView.builder(
+          shrinkWrap: true,
+          itemCount: widget.packs.length,
+          itemBuilder: (ctx, i) {
+            final pack = widget.packs[i];
+            return CheckboxListTile(
+              value: _selected.contains(i),
+              onChanged: (checked) {
+                setState(() {
+                  if (checked == true) {
+                    _selected.add(i);
+                  } else {
+                    _selected.remove(i);
+                  }
+                });
+              },
+              title: Text(pack.name),
+              subtitle: Text('${pack.stickerCount} 个表情'),
+              controlAffinity: ListTileControlAffinity.leading,
+            );
+          },
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('取消'),
+        ),
+        FilledButton(
+          onPressed: _selected.isEmpty
+              ? null
+              : () => Navigator.pop(context, _selected.map((i) => widget.packs[i]).toList()),
+          child: Text('发送 (${_selected.length})'),
+        ),
+      ],
+    );
   }
 }
