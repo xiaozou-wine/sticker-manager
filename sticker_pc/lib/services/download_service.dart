@@ -8,6 +8,8 @@ import '../models/sticker.dart';
 class DownloadService {
   final ApiService apiService;
   final StorageService storageService;
+  /// 并行下载数
+  static const int _maxConcurrent = 5;
 
   DownloadService({required this.apiService, required this.storageService});
 
@@ -34,29 +36,42 @@ class DownloadService {
 
     final stickers = <Sticker>[];
     final failedIds = <String>[];
-    for (int i = 0; i < remoteStickers.length; i++) {
-      final remote = remoteStickers[i];
-      try {
-        final ext = remote.extension.isNotEmpty ? remote.extension : '.png';
-        final localPath = p.join(packDir.path, '${remote.id}$ext');
-        await apiService.downloadSticker(remote.fileUrl, localPath);
+    int completed = 0;
 
-        final sticker = Sticker(
-          id: remote.id,
-          packId: pack.id,
-          type: remote.type,
-          width: remote.width,
-          height: remote.height,
-          sizeBytes: remote.sizeBytes,
-          extension: ext,
-          localPath: localPath,
-        );
-        stickers.add(sticker);
-        onProgress?.call(i + 1, remoteStickers.length);
-      } catch (e) {
-        failedIds.add(remote.id);
-        continue;
+    // 并行下载：每批 _maxConcurrent 个同时下载
+    for (int start = 0; start < remoteStickers.length; start += _maxConcurrent) {
+      final end = (start + _maxConcurrent).clamp(0, remoteStickers.length);
+      final futures = <Future<void>>[];
+
+      for (int i = start; i < end; i++) {
+        final remote = remoteStickers[i];
+        futures.add(() async {
+          try {
+            final ext = remote.extension.isNotEmpty ? remote.extension : '.png';
+            final localPath = p.join(packDir.path, '${remote.id}$ext');
+            await apiService.downloadSticker(remote.fileUrl, localPath);
+
+            final sticker = Sticker(
+              id: remote.id,
+              packId: pack.id,
+              type: remote.type,
+              width: remote.width,
+              height: remote.height,
+              sizeBytes: remote.sizeBytes,
+              extension: ext,
+              localPath: localPath,
+            );
+            stickers.add(sticker);
+          } catch (e) {
+            failedIds.add(remote.id);
+          } finally {
+            completed++;
+            onProgress?.call(completed, remoteStickers.length);
+          }
+        }());
       }
+
+      await Future.wait(futures);
     }
 
     await storageService.insertStickers(stickers);

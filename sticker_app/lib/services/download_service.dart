@@ -9,6 +9,8 @@ import '../models/sticker.dart';
 class DownloadService {
   final ApiService apiService;
   final StorageService storageService;
+  /// 并行下载数，5 个并发足够跑满带宽又不会过载
+  static const int _maxConcurrent = 5;
 
   DownloadService({required this.apiService, required this.storageService});
 
@@ -36,34 +38,47 @@ class DownloadService {
 
     final stickers = <Sticker>[];
     final failedIds = <String>[];
-    for (int i = 0; i < remoteStickers.length; i++) {
-      final remote = remoteStickers[i];
-      try {
-        final ext = remote.extension.isNotEmpty ? remote.extension : '.png';
-        final localPath = p.join(packDir.path, '${remote.id}$ext');
-        await apiService.downloadSticker(remote.fileUrl, localPath);
+    int completed = 0;
 
-        // Save to phone gallery (best-effort)
-        if (Platform.isAndroid) {
-          try { await Gal.putImage(localPath, album: 'StickerApp/$packName'); } catch (_) {}
-        }
+    // 并行下载：每批 _maxConcurrent 个同时下载
+    for (int start = 0; start < remoteStickers.length; start += _maxConcurrent) {
+      final end = (start + _maxConcurrent).clamp(0, remoteStickers.length);
+      final futures = <Future<void>>[];
 
-        final sticker = Sticker(
-          id: remote.id,
-          packId: pack.id,
-          type: remote.type,
-          width: remote.width,
-          height: remote.height,
-          sizeBytes: remote.sizeBytes,
-          extension: ext,
-          localPath: localPath,
-        );
-        stickers.add(sticker);
-        onProgress?.call(i + 1, remoteStickers.length);
-      } catch (e) {
-        failedIds.add(remote.id);
-        continue;
+      for (int i = start; i < end; i++) {
+        final remote = remoteStickers[i];
+        futures.add(() async {
+          try {
+            final ext = remote.extension.isNotEmpty ? remote.extension : '.png';
+            final localPath = p.join(packDir.path, '${remote.id}$ext');
+            await apiService.downloadSticker(remote.fileUrl, localPath);
+
+            // Save to phone gallery (best-effort)
+            if (Platform.isAndroid) {
+              try { await Gal.putImage(localPath, album: 'StickerApp/$packName'); } catch (_) {}
+            }
+
+            final sticker = Sticker(
+              id: remote.id,
+              packId: pack.id,
+              type: remote.type,
+              width: remote.width,
+              height: remote.height,
+              sizeBytes: remote.sizeBytes,
+              extension: ext,
+              localPath: localPath,
+            );
+            stickers.add(sticker);
+          } catch (e) {
+            failedIds.add(remote.id);
+          } finally {
+            completed++;
+            onProgress?.call(completed, remoteStickers.length);
+          }
+        }());
       }
+
+      await Future.wait(futures);
     }
 
     await storageService.insertStickers(stickers);

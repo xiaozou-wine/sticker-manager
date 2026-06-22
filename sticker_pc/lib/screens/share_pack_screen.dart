@@ -262,8 +262,8 @@ class _SharePackScreenState extends State<SharePackScreen> {
         return;
       }
 
-      // 分片上传：每批不超过 80MB，绕过 Cloudflare 100MB 限制
-      const int maxChunkSize = 80 * 1024 * 1024; // 80MB
+      // 分片上传：每批不超过 10MB，小分片并行提速
+      const int maxChunkSize = 10 * 1024 * 1024; // 10MB
       final chunks = <List<File>>[];
       var currentChunk = <File>[];
       var currentSize = 0;
@@ -304,9 +304,9 @@ class _SharePackScreenState extends State<SharePackScreen> {
       completedChunks = 1;
       setState(() { _statusText = '上传中 1/${chunks.length}...'; });
 
-      // 后续批次：最多 3 个并行追加
+      // 后续批次：最多 5 个并行追加（配合 10MB 小分片）
       if (chunks.length > 1) {
-        const int maxConcurrent = 3;
+        const int maxConcurrent = 5;
         final shareCode = result.pack.shareCode!;
 
         for (int start = 1; start < chunks.length; start += maxConcurrent) {

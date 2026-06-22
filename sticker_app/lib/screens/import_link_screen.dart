@@ -208,51 +208,66 @@ class _ImportLinkScreenState extends State<ImportLinkScreen> {
     final stickers = <Sticker>[];
     final importedHashes = <String>[];
     int failedCount = 0;
-    for (int i = 0; i < remoteStickers.length; i++) {
-      final remote = remoteStickers[i];
-      try {
-        final tempPath = p.join(packDir.path, '${remote.id}.tmp');
-        await api.downloadSticker(remote.fileUrl, tempPath);
-        final rawData = await File(tempPath).readAsBytes();
-        // 有密钥就解密，没密钥就是原图
-        final decData = link.isEncrypted
-            ? CryptoService.decryptData(rawData, link.key!)
-            : rawData;
-        var ext = _guessExtension(decData);
-        var saveData = decData;
-        if (ext == '.webp') {
-          final converted = _convertWebpToPng(decData);
-          if (converted != null) {
-            saveData = Uint8List.fromList(converted);
-            ext = '.png';
-            debugPrint('WebP→PNG 转换成功: ${remote.id}');
-          } else {
-            debugPrint('WebP→PNG 转换失败，保留原始 WebP: ${remote.id}');
-          }
-        }
-        final localPath = p.join(packDir.path, '${remote.id}$ext');
-        await File(localPath).writeAsBytes(saveData);
-        await File(tempPath).delete();
+    int completed = 0;
+    const int maxConcurrent = 5;
 
-        // 记录 hash（链接导入时已同时保存到相册）
-        importedHashes.add(sha256.convert(saveData).toString());
+    // 并行下载+解密：每批 maxConcurrent 个同时进行
+    for (int start = 0; start < remoteStickers.length; start += maxConcurrent) {
+      final end = (start + maxConcurrent).clamp(0, remoteStickers.length);
+      final futures = <Future<void>>[];
 
-        // Save to phone gallery (Android only, best-effort)
-        if (Platform.isAndroid) {
+      for (int i = start; i < end; i++) {
+        final remote = remoteStickers[i];
+        futures.add(() async {
           try {
-            await Gal.putImage(localPath, album: 'StickerApp/${pack.name}');
-          } catch (_) {}
-        }
+            final tempPath = p.join(packDir.path, '${remote.id}.tmp');
+            await api.downloadSticker(remote.fileUrl, tempPath);
+            final rawData = await File(tempPath).readAsBytes();
+            // 有密钥就解密，没密钥就是原图
+            final decData = link.isEncrypted
+                ? CryptoService.decryptData(rawData, link.key!)
+                : rawData;
+            var ext = _guessExtension(decData);
+            var saveData = decData;
+            if (ext == '.webp') {
+              final converted = _convertWebpToPng(decData);
+              if (converted != null) {
+                saveData = Uint8List.fromList(converted);
+                ext = '.png';
+                debugPrint('WebP→PNG 转换成功: ${remote.id}');
+              } else {
+                debugPrint('WebP→PNG 转换失败，保留原始 WebP: ${remote.id}');
+              }
+            }
+            final localPath = p.join(packDir.path, '${remote.id}$ext');
+            await File(localPath).writeAsBytes(saveData);
+            await File(tempPath).delete();
 
-        stickers.add(Sticker(
-          id: remote.id, packId: pack.id, type: remote.type,
-          width: remote.width, height: remote.height,
-          sizeBytes: saveData.length, extension: ext, localPath: localPath,
-        ));
-        if (mounted) setState(() { _downloadProgress = (i + 1) / remoteStickers.length; });
-      } catch (e) {
-        failedCount++;
+            // 记录 hash（链接导入时已同时保存到相册）
+            importedHashes.add(sha256.convert(saveData).toString());
+
+            // Save to phone gallery (Android only, best-effort)
+            if (Platform.isAndroid) {
+              try {
+                await Gal.putImage(localPath, album: 'StickerApp/${pack.name}');
+              } catch (_) {}
+            }
+
+            stickers.add(Sticker(
+              id: remote.id, packId: pack.id, type: remote.type,
+              width: remote.width, height: remote.height,
+              sizeBytes: saveData.length, extension: ext, localPath: localPath,
+            ));
+          } catch (e) {
+            failedCount++;
+          } finally {
+            completed++;
+            if (mounted) setState(() { _downloadProgress = completed / remoteStickers.length; });
+          }
+        }());
       }
+
+      await Future.wait(futures);
     }
 
     if (stickers.isNotEmpty) {

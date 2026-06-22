@@ -131,12 +131,14 @@ class GallerySaveService {
     // 覆盖模式：清空本地 hash + 删除相册文件
     if (mode == 'replace') {
       await _clearHashes(packId);
-      try {
-        final assets = await _getAlbumAssets(name);
-        if (assets.isNotEmpty) {
-          await PhotoManager.editor.deleteWithIds(assets.map((a) => a.id).toList());
+      final assets = await _getAlbumAssets(name);
+      if (assets.isNotEmpty) {
+        final deleted = await PhotoManager.editor.deleteWithIds(assets.map((a) => a.id).toList());
+        // 用户拒绝删除权限或删除失败时，中止保存，避免重复照片
+        if (deleted.isEmpty && assets.isNotEmpty) {
+          return {'saved': 0, 'skipped': 0, 'failed': 0, 'debug': '用户取消删除，已中止覆盖保存'};
         }
-      } catch (_) {}
+      }
     }
 
     // 加载 hash 记录（覆盖模式已清空，得到空 map）

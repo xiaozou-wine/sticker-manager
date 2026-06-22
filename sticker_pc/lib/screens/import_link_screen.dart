@@ -193,36 +193,53 @@ class _ImportLinkScreenState extends State<ImportLinkScreen> {
 
     final stickers = <Sticker>[];
     int failedCount = 0;
-    for (int i = 0; i < remoteStickers.length; i++) {
-      final remote = remoteStickers[i];
-      try {
-        final tempPath = p.join(packDir.path, '${remote.id}.tmp');
-        await api.downloadSticker(remote.fileUrl, tempPath);
-        final rawData = await File(tempPath).readAsBytes();
-        // 有密钥就解密，没密钥就是原图
-        final decData = link.isEncrypted
-            ? CryptoService.decryptData(rawData, link.key!)
-            : rawData;
-        var ext = _guessExtension(decData);
-        var saveData = decData;
-        if (ext == '.webp') {
-          final converted = _convertWebpToPng(decData);
-          if (converted != null) {
-            saveData = Uint8List.fromList(converted);
-            ext = '.png';
-          }
-        }
-        final localPath = p.join(packDir.path, '${remote.id}$ext');
-        await File(localPath).writeAsBytes(saveData);
-        await File(tempPath).delete();
+    int completed = 0;
+    const int maxConcurrent = 5;
 
-        stickers.add(Sticker(
-          id: remote.id, packId: pack.id, type: remote.type,
-          width: remote.width, height: remote.height,
-          sizeBytes: saveData.length, extension: ext, localPath: localPath,
-        ));
-        if (mounted) setState(() { _downloadProgress = (i + 1) / remoteStickers.length; });
-      } catch (e) { failedCount++; }
+    // 并行下载+解密：每批 maxConcurrent 个同时进行
+    for (int start = 0; start < remoteStickers.length; start += maxConcurrent) {
+      final end = (start + maxConcurrent).clamp(0, remoteStickers.length);
+      final futures = <Future<void>>[];
+
+      for (int i = start; i < end; i++) {
+        final remote = remoteStickers[i];
+        futures.add(() async {
+          try {
+            final tempPath = p.join(packDir.path, '${remote.id}.tmp');
+            await api.downloadSticker(remote.fileUrl, tempPath);
+            final rawData = await File(tempPath).readAsBytes();
+            // 有密钥就解密，没密钥就是原图
+            final decData = link.isEncrypted
+                ? CryptoService.decryptData(rawData, link.key!)
+                : rawData;
+            var ext = _guessExtension(decData);
+            var saveData = decData;
+            if (ext == '.webp') {
+              final converted = _convertWebpToPng(decData);
+              if (converted != null) {
+                saveData = Uint8List.fromList(converted);
+                ext = '.png';
+              }
+            }
+            final localPath = p.join(packDir.path, '${remote.id}$ext');
+            await File(localPath).writeAsBytes(saveData);
+            await File(tempPath).delete();
+
+            stickers.add(Sticker(
+              id: remote.id, packId: pack.id, type: remote.type,
+              width: remote.width, height: remote.height,
+              sizeBytes: saveData.length, extension: ext, localPath: localPath,
+            ));
+          } catch (e) {
+            failedCount++;
+          } finally {
+            completed++;
+            if (mounted) setState(() { _downloadProgress = completed / remoteStickers.length; });
+          }
+        }());
+      }
+
+      await Future.wait(futures);
     }
 
     if (stickers.isNotEmpty) {
