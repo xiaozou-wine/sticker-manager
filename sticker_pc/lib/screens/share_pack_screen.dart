@@ -233,8 +233,9 @@ class _SharePackScreenState extends State<SharePackScreen> {
       widget.pack.isUploaded = true;
       await storage.updatePack(widget.pack);
       setState(() { _shareCode = result.pack.shareCode; });
-    } catch (e) {
-      setState(() { _error = '上传失败，请检查网络连接'; });
+    } catch (e, stack) {
+      debugPrint('Central upload error: $e\n$stack');
+      setState(() { _error = '上传失败: $e'; });
     } finally {
       setState(() { _isUploading = false; });
     }
@@ -263,6 +264,7 @@ class _SharePackScreenState extends State<SharePackScreen> {
       final key = CryptoService.generateKey();
       final tempDir = Directory.systemTemp.createTempSync('sticker_enc_');
       try {
+        // 加密所有文件
         final encryptedFiles = <File>[];
         for (final file in files) {
           final plaintext = await file.readAsBytes();
@@ -272,17 +274,60 @@ class _SharePackScreenState extends State<SharePackScreen> {
           encryptedFiles.add(encFile);
         }
 
+        // 分片上传：每批不超过 80MB，绕过 Cloudflare 100MB 限制
+        const int maxChunkSize = 80 * 1024 * 1024; // 80MB
+        final chunks = <List<File>>[];
+        var currentChunk = <File>[];
+        var currentSize = 0;
+        for (final file in encryptedFiles) {
+          final fileSize = await file.length();
+          if (currentChunk.isNotEmpty && currentSize + fileSize > maxChunkSize) {
+            chunks.add(currentChunk);
+            currentChunk = <File>[];
+            currentSize = 0;
+          }
+          currentChunk.add(file);
+          currentSize += fileSize;
+        }
+        if (currentChunk.isNotEmpty) chunks.add(currentChunk);
+
+        debugPrint('VPS upload: ${encryptedFiles.length} files, ${chunks.length} chunks');
+
         final api = ApiService(baseUrl: AppConfig.apiBaseUrl);
-        final result = await api.uploadPack(
-          name: widget.pack.name,
-          description: widget.pack.description,
-          images: encryptedFiles,
-          customBaseUrl: serverAddr,
-          authToken: password,
-          onSendProgress: (sent, total) {
-            if (total > 0) setState(() { _uploadProgress = sent / total; });
-          },
-        );
+        UploadResult? result;
+
+        for (int i = 0; i < chunks.length; i++) {
+          if (i == 0) {
+            // 第一批：创建表情包
+            result = await api.uploadPack(
+              name: widget.pack.name,
+              description: widget.pack.description,
+              images: chunks[i],
+              customBaseUrl: serverAddr,
+              authToken: password,
+              onSendProgress: (sent, total) {
+                if (total > 0) setState(() { _uploadProgress = sent / total / chunks.length; });
+              },
+            );
+          } else {
+            // 后续批次：追加到已有表情包
+            final appendResult = await api.appendStickers(
+              shareCode: result!.pack.shareCode!,
+              images: chunks[i],
+              customBaseUrl: serverAddr,
+              authToken: password,
+              onSendProgress: (sent, total) {
+                if (total > 0) setState(() {
+                  _uploadProgress = (i + sent / total) / chunks.length;
+                });
+              },
+            );
+            result = appendResult;
+          }
+          debugPrint('Chunk ${i + 1}/${chunks.length} uploaded');
+        }
+
+        if (result == null) return;
 
         final link = CryptoService.buildShareLink(
           serverAddr: serverAddr,
@@ -301,8 +346,9 @@ class _SharePackScreenState extends State<SharePackScreen> {
       } finally {
         if (tempDir.existsSync()) tempDir.deleteSync(recursive: true);
       }
-    } catch (e) {
-      setState(() { _error = '上传失败，请检查网络连接'; });
+    } catch (e, stack) {
+      debugPrint('VPS upload error: $e\n$stack');
+      setState(() { _error = '上传失败: $e'; });
     } finally {
       setState(() { _isUploading = false; });
     }

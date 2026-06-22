@@ -42,6 +42,7 @@ func main() {
 
 	auth := api.Group("", authMW(password))
 	auth.POST("/packs", createPack(db, staticDir))
+	auth.POST("/packs/:code/stickers", appendStickers(db, staticDir))
 	auth.DELETE("/packs/:code", deletePack(db, staticDir))
 
 	r.GET("/health", func(c *gin.Context) { c.JSON(200, gin.H{"status": "ok"}) })
@@ -143,6 +144,62 @@ func createPack(db *DB, staticDir string) gin.HandlerFunc {
 		db.IncrementPackCount(pack.ID, len(uploaded))
 		updatedPack, _ := db.GetPackByID(pack.ID)
 		c.JSON(201, gin.H{"pack": updatedPack, "stickers": uploaded})
+	}
+}
+
+// appendStickers 追加表情到已有表情包（分片上传用）
+func appendStickers(db *DB, staticDir string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		code := c.Param("code")
+		pack, err := db.GetPackByShareCode(code)
+		if err != nil {
+			c.JSON(404, gin.H{"error": "pack not found"})
+			return
+		}
+
+		form, err := c.MultipartForm()
+		if err != nil {
+			c.JSON(400, gin.H{"error": "invalid form"})
+			return
+		}
+		files := form.File["stickers"]
+		if len(files) == 0 {
+			c.JSON(400, gin.H{"error": "no stickers"})
+			return
+		}
+
+		packDir := filepath.Join(staticDir, pack.ID)
+		os.MkdirAll(packDir, 0755)
+		offset := pack.StickerCount // 当前已有数量，新 ID 从这里接着编号
+
+		var uploaded []gin.H
+		for i, file := range files {
+			ext := filepath.Ext(file.Filename)
+			if ext == "" {
+				ext = ".bin"
+			}
+			sid := fmt.Sprintf("%s_%d", pack.ID, offset+i)
+			savePath := filepath.Join(packDir, sid+ext)
+			if err := c.SaveUploadedFile(file, savePath); err != nil {
+				continue
+			}
+			st := &Sticker{
+				ID: sid, PackID: pack.ID, Type: "image",
+				SizeBytes: file.Size, Extension: ext, CreatedAt: time.Now(),
+			}
+			if err := db.CreateSticker(st); err != nil {
+				continue
+			}
+			uploaded = append(uploaded, gin.H{"id": sid, "type": "image", "file_url": st.FileURL()})
+		}
+
+		if len(uploaded) == 0 {
+			c.JSON(400, gin.H{"error": "all uploads failed"})
+			return
+		}
+		db.IncrementPackCount(pack.ID, len(uploaded))
+		updatedPack, _ := db.GetPackByID(pack.ID)
+		c.JSON(200, gin.H{"pack": updatedPack, "stickers": uploaded})
 	}
 }
 

@@ -131,6 +131,47 @@ class ApiService {
     );
   }
 
+  /// 追加表情到已有表情包（分片上传用）
+  Future<UploadResult> appendStickers({
+    required String shareCode,
+    required List<File> images,
+    String? customBaseUrl,
+    String? authToken,
+    Function(int, int)? onSendProgress,
+  }) async {
+    final dio = customBaseUrl != null
+        ? Dio(BaseOptions(
+            baseUrl: customBaseUrl,
+            connectTimeout: const Duration(seconds: 10),
+            receiveTimeout: const Duration(seconds: 120),
+            headers: authToken != null ? {'X-Auth-Token': authToken} : null,
+          ))
+        : _dio;
+
+    final formData = FormData.fromMap({
+      'stickers': await Future.wait(
+        images.map((f) async => MultipartFile.fromFile(
+              f.path,
+              filename: f.path.split(Platform.pathSeparator).last,
+            )),
+      ),
+    });
+
+    final response = await dio.post(
+      '/api/packs/$shareCode/stickers',
+      data: formData,
+      onSendProgress: onSendProgress,
+    );
+
+    final packData = response.data['pack'];
+    final stickersData = response.data['stickers'] as List;
+
+    return UploadResult(
+      pack: StickerPack.fromApiMap(packData),
+      stickers: stickersData.map((s) => Sticker.fromApiMap(s)).toList(),
+    );
+  }
+
   static void _validateServerAddr(String addr) {
     final uri = Uri.tryParse(addr);
     if (uri == null || !uri.hasScheme || !uri.hasAuthority) {
