@@ -7,14 +7,16 @@ class ShareLinkInfo {
   final String serverAddr;
   final String packId;
   final String shareCode;
-  final Uint8List key;
+  final Uint8List? key; // null = 无加密（原图）
 
   ShareLinkInfo({
     required this.serverAddr,
     required this.packId,
     required this.shareCode,
-    required this.key,
+    this.key,
   });
+
+  bool get isEncrypted => key != null;
 }
 
 class CryptoService {
@@ -54,11 +56,14 @@ class CryptoService {
     required String serverAddr,
     required String packId,
     required String shareCode,
-    required Uint8List key,
+    Uint8List? key,
   }) {
     serverAddr = serverAddr.replaceAll(RegExp(r'/+$'), '');
     final payload = '$serverAddr|$packId|$shareCode';
     final encodedPayload = base64Url.encode(utf8.encode(payload)).replaceAll('=', '');
+    if (key == null) {
+      return 'sticker://share/$encodedPayload';
+    }
     final encodedKey = base64Url.encode(key).replaceAll('=', '');
     return 'sticker://share/$encodedPayload#$encodedKey';
   }
@@ -68,11 +73,17 @@ class CryptoService {
     if (!link.startsWith('sticker://share/')) return null;
     final body = link.substring('sticker://share/'.length);
     final hashIdx = body.indexOf('#');
-    if (hashIdx < 0) return null;
     try {
-      final payload = utf8.decode(base64Url.decode(_pad(body.substring(0, hashIdx))));
-      final key = Uint8List.fromList(base64Url.decode(_pad(body.substring(hashIdx + 1))));
-      if (key.length != 32) return null;
+      String encodedPayload;
+      Uint8List? key;
+      if (hashIdx >= 0) {
+        encodedPayload = body.substring(0, hashIdx);
+        key = Uint8List.fromList(base64Url.decode(_pad(body.substring(hashIdx + 1))));
+        if (key.length != 32) return null;
+      } else {
+        encodedPayload = body;
+      }
+      final payload = utf8.decode(base64Url.decode(_pad(encodedPayload)));
       final parts = payload.split('|');
       if (parts.length != 3) return null;
       final serverAddr = parts[0].replaceAll(RegExp(r'[\s​‌‍﻿]+'), '').replaceAll(RegExp(r'/+$'), '');

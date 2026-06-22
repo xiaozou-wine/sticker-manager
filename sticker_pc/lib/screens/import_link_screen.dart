@@ -196,10 +196,13 @@ class _ImportLinkScreenState extends State<ImportLinkScreen> {
     for (int i = 0; i < remoteStickers.length; i++) {
       final remote = remoteStickers[i];
       try {
-        final tempPath = p.join(packDir.path, '${remote.id}.enc');
+        final tempPath = p.join(packDir.path, '${remote.id}.tmp');
         await api.downloadSticker(remote.fileUrl, tempPath);
-        final encData = await File(tempPath).readAsBytes();
-        final decData = CryptoService.decryptData(encData, link.key);
+        final rawData = await File(tempPath).readAsBytes();
+        // 有密钥就解密，没密钥就是原图
+        final decData = link.isEncrypted
+            ? CryptoService.decryptData(rawData, link.key!)
+            : rawData;
         var ext = _guessExtension(decData);
         var saveData = decData;
         if (ext == '.webp') {

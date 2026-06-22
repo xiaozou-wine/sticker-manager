@@ -23,6 +23,7 @@ class _SharePackScreenState extends State<SharePackScreen> {
   double _uploadProgress = 0;
   String? _error;
   String? _shareCode;
+  String _statusText = '加密并上传中...';
   final _serverController = TextEditingController();
   final _passwordController = TextEditingController();
   String? _vpsShareLink;
@@ -194,7 +195,7 @@ class _SharePackScreenState extends State<SharePackScreen> {
         if (_isUploading) ...[
           LinearProgressIndicator(value: _uploadProgress > 0 ? _uploadProgress : null),
           const SizedBox(height: 8),
-          Text('加密并上传中...', style: TextStyle(color: Colors.grey.shade600)),
+          Text(_statusText, style: TextStyle(color: Colors.grey.shade600)),
           const SizedBox(height: 12),
         ],
         ElevatedButton.icon(
@@ -255,96 +256,101 @@ class _SharePackScreenState extends State<SharePackScreen> {
           .toList();
       if (files.isEmpty) { setState(() { _error = '没有可上传的表情文件'; }); return; }
 
-      final key = CryptoService.generateKey();
-      final tempDir = Directory.systemTemp.createTempSync('sticker_enc_');
-      try {
-        // 加密所有文件
-        final encryptedFiles = <File>[];
-        for (final file in files) {
-          final plaintext = await file.readAsBytes();
-          final encrypted = CryptoService.encryptData(plaintext, key);
-          final encFile = File('${tempDir.path}/${file.uri.pathSegments.last}.enc');
-          await encFile.writeAsBytes(encrypted);
-          encryptedFiles.add(encFile);
-        }
-
-        // 分片上传：每批不超过 80MB，绕过 Cloudflare 100MB 限制
-        const int maxChunkSize = 80 * 1024 * 1024; // 80MB
-        final chunks = <List<File>>[];
-        var currentChunk = <File>[];
-        var currentSize = 0;
-        for (final file in encryptedFiles) {
-          final fileSize = await file.length();
-          if (currentChunk.isNotEmpty && currentSize + fileSize > maxChunkSize) {
-            chunks.add(currentChunk);
-            currentChunk = <File>[];
-            currentSize = 0;
-          }
-          currentChunk.add(file);
-          currentSize += fileSize;
-        }
-        if (currentChunk.isNotEmpty) {
+      // 分片上传：每批不超过 80MB，绕过 Cloudflare 100MB 限制
+      const int maxChunkSize = 80 * 1024 * 1024; // 80MB
+      final chunks = <List<File>>[];
+      var currentChunk = <File>[];
+      var currentSize = 0;
+      for (final file in files) {
+        final fileSize = await file.length();
+        if (currentChunk.isNotEmpty && currentSize + fileSize > maxChunkSize) {
           chunks.add(currentChunk);
+          currentChunk = <File>[];
+          currentSize = 0;
         }
-
-        debugPrint('VPS upload: ${encryptedFiles.length} files, ${chunks.length} chunks');
-
-        final api = ApiService(baseUrl: AppConfig.apiBaseUrl);
-        UploadResult? result;
-
-        for (int i = 0; i < chunks.length; i++) {
-          if (i == 0) {
-            // 第一批：创建表情包
-            result = await api.uploadPack(
-              name: widget.pack.name,
-              description: widget.pack.description,
-              images: chunks[i],
-              customBaseUrl: serverAddr,
-              authToken: password,
-              onSendProgress: (sent, total) {
-                if (total > 0) {
-                  setState(() { _uploadProgress = sent / total / chunks.length; });
-                }
-              },
-            );
-          } else {
-            // 后续批次：追加到已有表情包
-            final appendResult = await api.appendStickers(
-              shareCode: result!.pack.shareCode!,
-              images: chunks[i],
-              customBaseUrl: serverAddr,
-              authToken: password,
-              onSendProgress: (sent, total) {
-                if (total > 0) {
-                  setState(() { _uploadProgress = (i + sent / total) / chunks.length; });
-                }
-              },
-            );
-            result = appendResult;
-          }
-          debugPrint('Chunk ${i + 1}/${chunks.length} uploaded');
-        }
-
-        if (result == null) return;
-
-        final link = CryptoService.buildShareLink(
-          serverAddr: serverAddr,
-          packId: result.pack.id,
-          shareCode: (result.pack.shareCode ?? "unknown"),
-          key: key,
-        );
-
-        // 保存分享码到本地
-        widget.pack.shareCode = result.pack.shareCode;
-        widget.pack.isUploaded = true;
-        if (!mounted) return;
-        final storage2 = context.read<StorageService>();
-        await storage2.updatePack(widget.pack);
-
-        setState(() { _vpsShareLink = link; });
-      } finally {
-        if (tempDir.existsSync()) tempDir.deleteSync(recursive: true);
+        currentChunk.add(file);
+        currentSize += fileSize;
       }
+      if (currentChunk.isNotEmpty) {
+        chunks.add(currentChunk);
+      }
+
+      debugPrint('VPS upload: ${files.length} files, ${chunks.length} chunks');
+
+      final api = ApiService(baseUrl: AppConfig.apiBaseUrl);
+      UploadResult? result;
+      int completedChunks = 0;
+
+      setState(() { _statusText = '上传中 0/${chunks.length}...'; });
+
+      // 第一批：创建表情包（必须先完成）
+      result = await api.uploadPack(
+        name: widget.pack.name,
+        description: widget.pack.description,
+        images: chunks[0],
+        customBaseUrl: serverAddr,
+        authToken: password,
+        onSendProgress: (sent, total) {
+          if (total > 0) {
+            setState(() {
+              _uploadProgress = sent / total / chunks.length;
+              _statusText = '上传中 0/${chunks.length}...';
+            });
+          }
+        },
+      );
+      completedChunks = 1;
+      setState(() { _statusText = '上传中 1/${chunks.length}...'; });
+
+      // 后续批次：最多 3 个并行追加
+      if (chunks.length > 1) {
+        const int maxConcurrent = 3;
+        final shareCode = result!.pack.shareCode ?? '';
+
+        for (int start = 1; start < chunks.length; start += maxConcurrent) {
+          final end = (start + maxConcurrent).clamp(0, chunks.length);
+          final futures = <Future<void>>[];
+
+          for (int i = start; i < end; i++) {
+            final chunkIndex = i;
+            futures.add(() async {
+              final appendResult = await api.appendStickers(
+                shareCode: shareCode,
+                images: chunks[chunkIndex],
+                customBaseUrl: serverAddr,
+                authToken: password,
+              );
+              result = appendResult;
+              completedChunks++;
+              setState(() {
+                _statusText = '上传中 $completedChunks/${chunks.length}...';
+                _uploadProgress = completedChunks / chunks.length;
+              });
+              debugPrint('Chunk ${chunkIndex + 1}/${chunks.length} uploaded');
+            }());
+          }
+
+          await Future.wait(futures);
+        }
+      }
+
+      if (result == null) return;
+
+      final r = result!;
+      final link = CryptoService.buildShareLink(
+        serverAddr: serverAddr,
+        packId: r.pack.id,
+        shareCode: (r.pack.shareCode ?? "unknown"),
+      );
+
+      // 保存分享码到本地
+      widget.pack.shareCode = r.pack.shareCode;
+      widget.pack.isUploaded = true;
+      if (!mounted) return;
+      final storage2 = context.read<StorageService>();
+      await storage2.updatePack(widget.pack);
+
+      setState(() { _vpsShareLink = link; });
     } catch (e, stack) {
       debugPrint('VPS upload error: $e\n$stack');
       setState(() { _error = '上传失败: $e'; });
